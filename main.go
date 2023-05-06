@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bot/telegram/services"
 	"bot/telegram/structs"
 	"bot/telegram/utils"
 	"encoding/json"
@@ -16,14 +17,22 @@ import (
 
 func main() {
 	err := godotenv.Load(".env")
+	telegramUrl := os.Getenv("TELEGRAM_BASE_URL")
+	dbName := os.Getenv("DB_NAME")
+	token := os.Getenv("TOKEN")
+	offset := 0
+
 	if err != nil {
 		fmt.Printf("Failed to load .env file: %s\n", err)
 		return
 	}
 
-	telegramUrl := os.Getenv("TELEGRAM_BASE_URL")
-	token := os.Getenv("TOKEN")
-	offset := 0
+	// Init main DB
+	_, errkek := services.CreateDbConnection(dbName)
+	if err != nil {
+		fmt.Printf("Error connecting to the db. %s", errkek)
+		return
+	}
 
 	for {
 		offset, err = getUpdates(telegramUrl, token, offset)
@@ -63,7 +72,12 @@ func getUpdates(telegramUrl string, token string, offset int) (int, error) {
 
 		isPlusOne := utils.ParsePlusOneFromMessage(update.Message.Text)
 
+		if !isPlusOne {
+			continue
+		}
+
 		// make the logic for creating tenants, add users by id and the count
+		// we can parse
 	}
 
 	return offset, nil

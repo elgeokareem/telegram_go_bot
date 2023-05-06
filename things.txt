@@ -1,4 +1,20 @@
+https://github.com/jackc/pgx
+
+https://github.com/go-saas/saas nultitenants library
+
 example response
+
+schema for the default tenant
+id (autoincrement)
+group_id (unique)
+group_name
+
+schema of the table for the tenant
+id (telegramId)
+first_name
+last_name
+username
+count (default 0)
 
 {
   "ok": true,
