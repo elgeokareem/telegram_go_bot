@@ -28,9 +28,9 @@ func main() {
 	}
 
 	// Init main DB
-	_, errkek := services.CreateDbConnection(dbName)
-	if err != nil {
-		fmt.Printf("Error connecting to the db. %s", errkek)
+	_, errDb := services.CreateDbConnection(dbName)
+	if errDb != nil {
+		fmt.Printf("Error connecting to the db. %s", errDb)
 		return
 	}
 
@@ -76,8 +76,8 @@ func getUpdates(telegramUrl string, token string, offset int) (int, error) {
 			continue
 		}
 
-		// make the logic for creating tenants, add users by id and the count
-		// we can parse
+		// TODO: make the logic for creating tenants, add users by id and the count
+		services.AddKarmaToUser(update)
 	}
 
 	return offset, nil

@@ -9,16 +9,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-/**
-que quiero hacer?
-Basicamente quiero crear una funcion que se conecte a postgres
-Para eso inicio a una conexion por defecto que tenga postgres.
-
-Despues de que tenga la conexion establecida, quiero crear una base de datos general
-para el bot de telegram.
-
-La funcion debe devolver de forma generica una conexion porque en una se usa para crear
-la base de datos general y para otra la usare para crear los tenants.
+/*
+usersRankingTable
+id (autoincrement)
+user_id int
+first_name string
+last_name string
+username string
+karma int
 */
 
 func CreateDbConnection(dbName string) (*pgx.Conn, error) {
@@ -61,6 +59,12 @@ func CreateDbConnection(dbName string) (*pgx.Conn, error) {
 		return nil, fmt.Errorf("unable to connect to target database: %w", err)
 	}
 
+	err = createUsersRankingTable(newConn)
+	if err != nil {
+		newConn.Close(context.Background())
+		return nil, fmt.Errorf("unable to create users_ranking table: %w", err)
+	}
+
 	return newConn, err
 }
 
@@ -74,3 +78,45 @@ func createDatabase(conn *pgx.Conn, dbName string) error {
 	_, err := conn.Exec(context.Background(), fmt.Sprintf("CREATE DATABASE %s", dbName))
 	return err
 }
+
+func createUsersRankingTable(conn *pgx.Conn) error {
+	sql := `
+		CREATE TABLE IF NOT EXISTS users_ranking (
+			id SERIAL PRIMARY KEY,
+			user_id INT NOT NULL UNIQUE,
+			first_name VARCHAR(255),
+			last_name VARCHAR(255),
+			username VARCHAR(255),
+			karma INT
+		)
+	`
+
+	_, err := conn.Exec(context.Background(), sql)
+	return err
+}
+
+// TODO: implement this function but maybe later.
+func CreateGroupListTable(conn *pgx.Conn) error {
+	sql := `
+		CREATE TABLE IF NOT EXISTS all_groups (
+		)
+	`
+	_, err := conn.Exec(context.Background(), sql)
+	return err
+}
+
+// func checkIfUserExists(conn *pgx.Conn,) {
+// 	sql := `
+// 		SELECT * FROM users_ranking ur WHERE ur.user_id = $1
+// 	`
+
+// 	err := conn.QueryRow(
+// 		context.Background(),
+// 		sql,
+// 		userRanking.UserID,
+// 		userRanking.FirstName,
+// 		userRanking.LastName,
+// 		userRanking.Username,
+// 		userRanking.Karma,
+// 	)
+// }
