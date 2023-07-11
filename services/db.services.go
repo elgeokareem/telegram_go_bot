@@ -87,7 +87,8 @@ func createUsersRankingTable(conn *pgx.Conn) error {
 			first_name VARCHAR(255),
 			last_name VARCHAR(255),
 			username VARCHAR(255),
-			karma INT
+			karma INT,
+			last_karma_given TIMESTAMP
 		)
 	`
 
@@ -95,7 +96,7 @@ func createUsersRankingTable(conn *pgx.Conn) error {
 	return err
 }
 
-// TODO: implement this function but maybe later.
+// TODO: implement this function but later.
 func CreateGroupListTable(conn *pgx.Conn) error {
 	sql := `
 		CREATE TABLE IF NOT EXISTS all_groups (
@@ -104,19 +105,3 @@ func CreateGroupListTable(conn *pgx.Conn) error {
 	_, err := conn.Exec(context.Background(), sql)
 	return err
 }
-
-// func checkIfUserExists(conn *pgx.Conn,) {
-// 	sql := `
-// 		SELECT * FROM users_ranking ur WHERE ur.user_id = $1
-// 	`
-
-// 	err := conn.QueryRow(
-// 		context.Background(),
-// 		sql,
-// 		userRanking.UserID,
-// 		userRanking.FirstName,
-// 		userRanking.LastName,
-// 		userRanking.Username,
-// 		userRanking.Karma,
-// 	)
-// }

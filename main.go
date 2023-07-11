@@ -2,18 +2,15 @@ package main
 
 import (
 	"bot/telegram/services"
-	"bot/telegram/structs"
-	"bot/telegram/utils"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"os"
 	"time"
 
 	"github.com/joho/godotenv"
 )
+
+// TODO: Change the chatId in the DB to be string and not number. This because some ids can be negative and have problems with SQL
 
 func main() {
 	err := godotenv.Load(".env")
@@ -35,50 +32,11 @@ func main() {
 	}
 
 	for {
-		offset, err = getUpdates(telegramUrl, token, offset)
+		offset, err = services.GetKarmaUpdates(telegramUrl, token, offset)
 		fmt.Println(offset)
 		if err != nil {
 			log.Fatal(err)
 		}
 		time.Sleep(time.Second * 3)
 	}
-}
-
-func getUpdates(telegramUrl string, token string, offset int) (int, error) {
-	completeUrl := fmt.Sprintf("%s%s/getUpdates?offset=%d", telegramUrl, token, offset)
-
-	response, err := http.Get(completeUrl)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer response.Body.Close()
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var result structs.UpdateResponse
-	errBody := json.Unmarshal(body, &result)
-	if errBody != nil {
-		return offset, err
-	}
-
-	for _, update := range result.Result {
-		updateID := update.UpdateID
-		if updateID >= offset {
-			offset = updateID + 1
-		}
-
-		isPlusOne := utils.ParsePlusOneFromMessage(update.Message.Text)
-
-		if !isPlusOne {
-			continue
-		}
-
-		// TODO: make the logic for creating tenants, add users by id and the count
-		services.AddKarmaToUser(update)
-	}
-
-	return offset, nil
 }

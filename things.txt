@@ -9,12 +9,12 @@ id (autoincrement)
 group_id (unique)
 group_name
 
-schema of the table for the tenant
-id (telegramId)
-first_name
-last_name
-username
-count (default 0)
+CONSTRAINS for the karma
+The user can only give karma to other users
+The user can only give karma to other users in the same group
+The user can only give karma to other users in the same group once a minute
+Add a flag that to check if the user is able to give karma (FOR THE FUTURE)
+
 
 {
   "ok": true,
