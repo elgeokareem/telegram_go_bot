@@ -20,7 +20,7 @@ func AddKarmaToUser(update structs.Update) error {
 		return errors.New("no reply or sender")
 	}
 
-	chatId := utils.Abs(update.Message.Chat.ID)
+	chatId := update.Message.Chat.ID
 	tableName := fmt.Sprintf("table_%d", chatId)
 
 	currentMessage := update.Message
@@ -65,7 +65,6 @@ func AddKarmaToUser(update structs.Update) error {
 		return fmt.Errorf("unable to upsert user ranking: %w", err)
 	}
 
-	fmt.Println("carajo")
 	SendMessage(chatId, "Ayy lmaoshin")
 
 	return nil
@@ -117,8 +116,8 @@ func GetKarmaUpdates(telegramUrl string, token string, offset int) (int, error) 
 
 	for _, update := range result.Result {
 		updateID := update.UpdateID
+		offset = updateID + 1
 		if updateID >= offset {
-			offset = updateID + 1
 		}
 
 		isPlusOne := utils.ParsePlusOneFromMessage(update.Message.Text)

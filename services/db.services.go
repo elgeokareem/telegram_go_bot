@@ -75,6 +75,9 @@ func databaseExists(conn *pgx.Conn, dbName string) (bool, error) {
 }
 
 func createDatabase(conn *pgx.Conn, dbName string) error {
+	// Safely quote the identifier
+	dbName = pgx.Identifier{dbName}.Sanitize()
+
 	_, err := conn.Exec(context.Background(), fmt.Sprintf("CREATE DATABASE %s", dbName))
 	return err
 }
