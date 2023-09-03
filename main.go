@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
+	"runtime"
 
 	"github.com/joho/godotenv"
 )
-
-// TODO: Change the chatId in the DB to be string and not number. This because some ids can be negative and have problems with SQL
 
 func main() {
 	err := godotenv.Load(".env")
@@ -31,12 +29,17 @@ func main() {
 		return
 	}
 
+	iteration := 0
+
 	for {
-		offset, err = services.GetKarmaUpdates(telegramUrl, token, offset)
+		iteration++
+		fmt.Println("OFFSET COMENZANDO", iteration)
+		fmt.Println("Number of goroutines:", runtime.NumGoroutine())
+		offset, err = services.ProcessTelegramMessages(telegramUrl, token, offset)
 		fmt.Println(offset)
 		if err != nil {
-			log.Fatal(err)
+			// log.Fatal(err). log.Fatal terminates the program
+			log.Println("ERROR: ", err)
 		}
-		time.Sleep(time.Second * 3)
 	}
 }

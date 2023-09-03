@@ -99,6 +99,41 @@ func createUsersRankingTable(conn *pgx.Conn) error {
 	return err
 }
 
+type UsersLovedHatedStruct struct {
+	FullName string
+	Karma    int
+}
+
+func GetMostLovedUsers(conn *pgx.Conn, orderType string) ([]UsersLovedHatedStruct, error) {
+	sql := fmt.Sprintf(`
+		SELECT CONCAT(first_name, ' ', last_name) as fullname, karma FROM users_ranking
+		WHERE karma < 0
+		ORDER BY karma %s, fullname ASC
+	`, orderType)
+
+	rows, err := conn.Query(context.Background(), sql)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []UsersLovedHatedStruct
+	for rows.Next() {
+		var user UsersLovedHatedStruct
+		if err := rows.Scan(&user.FullName, &user.Karma); err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+
+	// Check for any errors encountered during iteration
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
 // TODO: implement this function but later.
 func CreateGroupListTable(conn *pgx.Conn) error {
 	sql := `
