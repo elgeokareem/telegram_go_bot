@@ -1,4 +1,4 @@
-package utils
+package shared
 
 import (
 	"fmt"
@@ -17,7 +17,11 @@ func CreateDbString(schema string, user string, password string, host string, po
 	return fmt.Sprintf("%s://%s:%s@%s:%s/%s", schema, user, password, host, port, dbName)
 }
 
-func Abs(x int64) int64 {
+type Integer interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64
+}
+
+func Abs[T Integer](x T) T {
 	if x < 0 {
 		return -x
 	}

@@ -1,8 +1,8 @@
 package services
 
 import (
+	"bot/telegram/shared"
 	"bot/telegram/structs"
-	"bot/telegram/utils"
 	"context"
 	"encoding/json"
 	"errors"
@@ -35,7 +35,7 @@ func AddKarmaToUser(update structs.Update) error {
 
 	// TODO: Probably put it in another place. All validations should be together.
 	// Check if User can give karma given time constriction
-	CheckLastTimeUserGaveKarma(conn, currentMessage)
+	// CheckLastTimeUserGaveKarma(conn, currentMessage)
 
 	sqlToAddKarma := `
 		INSERT INTO users_ranking (user_id, first_name, last_name, username, karma, last_karma_given)
@@ -49,6 +49,12 @@ func AddKarmaToUser(update structs.Update) error {
 			last_karma_given = EXCLUDED.last_karma_given
 	`
 
+	currentMessageJSON, _ := json.MarshalIndent(currentMessage, "", "  ")
+	fmt.Printf("CURRENT MESSAGE: %s\n", string(currentMessageJSON))
+
+	messageToGiveKarmaJSON, _ := json.MarshalIndent(messageToGiveKarma, "", "  ")
+	fmt.Printf("MESSAGE TO GIVE KARMA: %s\n", string(messageToGiveKarmaJSON))
+
 	_, err = conn.Exec(
 		context.Background(),
 		sqlToAddKarma,
@@ -58,6 +64,8 @@ func AddKarmaToUser(update structs.Update) error {
 		messageToGiveKarma.Username,
 		nil,
 	)
+
+	fmt.Println("ERROR", err)
 
 	if err != nil {
 		return fmt.Errorf("unable to upsert user ranking: %w", err)
@@ -81,7 +89,7 @@ func CheckLastTimeUserGaveKarma(conn *pgx.Conn, currentMessage *structs.Message)
 		currentMessage.From.ID,
 	)
 	if err != nil {
-		return fmt.Errorf("Error => CheckIfUserCanGiveKarma:  %w", err)
+		return fmt.Errorf("error => CheckIfUserCanGiveKarma:  %w", err)
 	}
 
 	return nil
@@ -102,10 +110,11 @@ func KarmaValidations(update structs.Update) error {
 	// If user try to give karma to itself
 	if update.Message.ReplyToMessage.From.ID == update.Message.From.ID {
 		SendMessageWithReply(chatId, replyToMessageId, "You can't give karma to yourself dummy")
-		return errors.New("Can't give karma to yourself")
+		return errors.New("can't give karma to yourself")
 	}
 
 	// TODO: Add time validation to add karma
+	// UpdateKarmaGivenTimeOfUser()
 
 	return nil
 }
@@ -138,6 +147,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int) (int,
 	// fmt.Println(string(jsonData))
 
 	for _, update := range result.Result {
+		fmt.Println("UPDATE", update)
 		updateID := update.UpdateID
 		offset = updateID + 1
 
@@ -190,7 +200,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int) (int,
 			return offset, nil
 		}
 
-		isPlusMinusOne := utils.ParsePlusMinusOneFromMessage(update.Message.Text)
+		isPlusMinusOne := shared.ParsePlusMinusOneFromMessage(update.Message.Text)
 
 		if !isPlusMinusOne {
 			continue
@@ -203,7 +213,11 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int) (int,
 			return offset, err
 		}
 
-		AddKarmaToUser(update)
+		errKarma := AddKarmaToUser(update)
+		if err != nil {
+			offset++
+			return offset, errKarma
+		}
 	}
 
 	return offset, nil

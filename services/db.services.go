@@ -1,7 +1,7 @@
 package services
 
 import (
-	"bot/telegram/utils"
+	"bot/telegram/shared"
 	"context"
 	"fmt"
 	"os"
@@ -25,11 +25,13 @@ func (pm *PoolManager) GetPool(dbName string) (*pgxpool.Pool, error) {
 	}
 
 	// Convert the single connection to a pool
-	poolConfig := pgxpool.Config{
-		ConnConfig: conn.Config(),
-		MaxConns:   10, // or whatever maximum number you want
+	poolConfig, err := pgxpool.ParseConfig(conn.Config().ConnString())
+	if err != nil {
+		return nil, err
 	}
-	pool, err := pgxpool.ConnectConfig(context.Background(), &poolConfig)
+	poolConfig.MaxConns = 10
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +48,7 @@ func CreateDbConnection(dbName string) (*pgx.Conn, error) {
 	dbPort := os.Getenv("DB_PORT")
 	dbDefaultName := os.Getenv("DB_DEFAULT_NAME")
 
-	dbUrl := utils.CreateDbString(dbSchema, dbUser, dbPassword, dbHost, dbPort, dbDefaultName)
+	dbUrl := shared.CreateDbString(dbSchema, dbUser, dbPassword, dbHost, dbPort, dbDefaultName)
 
 	conn, err := pgx.Connect(context.Background(), dbUrl)
 	if err != nil {
@@ -70,7 +72,7 @@ func CreateDbConnection(dbName string) (*pgx.Conn, error) {
 	conn.Close(context.Background())
 
 	// Create a new connection string with the updated database name
-	newDbUrl := utils.CreateDbString(dbSchema, dbUser, dbPassword, dbHost, dbPort, dbName)
+	newDbUrl := shared.CreateDbString(dbSchema, dbUser, dbPassword, dbHost, dbPort, dbName)
 
 	// Connect to the newly created database
 	newConn, err := pgx.Connect(context.Background(), newDbUrl)
@@ -105,7 +107,7 @@ func createUsersRankingTable(conn *pgx.Conn) error {
 	sql := `
 		CREATE TABLE IF NOT EXISTS users_ranking (
 			id SERIAL PRIMARY KEY,
-			user_id INT NOT NULL UNIQUE,
+			user_id BIGINT NOT NULL UNIQUE,
 			first_name VARCHAR(255),
 			last_name VARCHAR(255),
 			username VARCHAR(255),
