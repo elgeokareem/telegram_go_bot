@@ -16,6 +16,7 @@ import (
 
 func AddKarmaToUser(update structs.Update) error {
 	chatId := update.Message.Chat.ID
+	replyToMessageId := update.Message.ReplyToMessage.MessageID
 	tableName := fmt.Sprintf("table_%d", chatId)
 
 	currentMessage := update.Message
@@ -32,8 +33,9 @@ func AddKarmaToUser(update structs.Update) error {
 
 	defer conn.Close(context.Background())
 
-	// Check if User can give karma
-	CheckIfUserCanGiveKarma(conn, currentMessage)
+	// TODO: Probably put it in another place. All validations should be together.
+	// Check if User can give karma given time constriction
+	CheckLastTimeUserGaveKarma(conn, currentMessage)
 
 	sqlToAddKarma := `
 		INSERT INTO users_ranking (user_id, first_name, last_name, username, karma, last_karma_given)
@@ -61,11 +63,13 @@ func AddKarmaToUser(update structs.Update) error {
 		return fmt.Errorf("unable to upsert user ranking: %w", err)
 	}
 
+	SendMessageWithReply(chatId, replyToMessageId, "testt")
+
 	return nil
 }
 
 // Check when was the last time the user gave karma.
-func CheckIfUserCanGiveKarma(conn *pgx.Conn, currentMessage *structs.Message) error {
+func CheckLastTimeUserGaveKarma(conn *pgx.Conn, currentMessage *structs.Message) error {
 	// TODO: For the future add a flag in the table with true or false something like.
 	sqlToAddKarmaGiver := `
 		SELECT last_karma_given FROM users_ranking ur WHERE ur.user_id = $1
@@ -77,7 +81,7 @@ func CheckIfUserCanGiveKarma(conn *pgx.Conn, currentMessage *structs.Message) er
 		currentMessage.From.ID,
 	)
 	if err != nil {
-		return fmt.Errorf("tremendo lio %w", err)
+		return fmt.Errorf("Error => CheckIfUserCanGiveKarma:  %w", err)
 	}
 
 	return nil
@@ -85,6 +89,25 @@ func CheckIfUserCanGiveKarma(conn *pgx.Conn, currentMessage *structs.Message) er
 
 func UpdateKarmaGivenTimeOfUser(conn *pgx.Conn, currentMessage *structs.Message) {
 	// TODO: this lol
+}
+
+func KarmaValidations(update structs.Update) error {
+	chatId := update.Message.Chat.ID
+	replyToMessageId := update.Message.ReplyToMessage.MessageID
+
+	if update.Message.ReplyToMessage == nil || update.Message.ReplyToMessage.From == nil {
+		return errors.New("no reply or sender")
+	}
+
+	// If user try to give karma to itself
+	if update.Message.ReplyToMessage.From.ID == update.Message.From.ID {
+		SendMessageWithReply(chatId, replyToMessageId, "You can't give karma to yourself dummy")
+		return errors.New("Can't give karma to yourself")
+	}
+
+	// TODO: Add time validation to add karma
+
+	return nil
 }
 
 func ProcessTelegramMessages(telegramUrl string, token string, offset int) (int, error) {
@@ -134,13 +157,14 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int) (int,
 				return offset, err
 			}
 
-			lovedUsers, err := GetMostLovedUsers(conn, "DESC")
+			lovedUsers, err := GetMostLovedUsers(conn)
 			if err != nil {
 				fmt.Println("ERROR loved users")
 				return offset, err
 			}
 			fmt.Println(lovedUsers)
 
+			offset++
 			return offset, nil
 		}
 
@@ -155,13 +179,14 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int) (int,
 				return offset, err
 			}
 
-			hatedUsers, err := GetMostLovedUsers(conn, "ASC")
+			hatedUsers, err := GetMostHatedUsers(conn)
 			if err != nil {
 				fmt.Println("ERROR loved users")
 				return offset, err
 			}
 			fmt.Println(hatedUsers)
 
+			offset++
 			return offset, nil
 		}
 
@@ -182,23 +207,4 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int) (int,
 	}
 
 	return offset, nil
-}
-
-func KarmaValidations(update structs.Update) error {
-	chatId := update.Message.Chat.ID
-	replyToMessageId := update.Message.ReplyToMessage.MessageID
-
-	if update.Message.ReplyToMessage == nil || update.Message.ReplyToMessage.From == nil {
-		return errors.New("no reply or sender")
-	}
-
-	// If user try to give karma to itself
-	if update.Message.ReplyToMessage.From.ID == update.Message.From.ID {
-		SendMessageWithReply(chatId, replyToMessageId, "You can't give karma to yourself dummy")
-		return errors.New("Can't give karma to yourself")
-	}
-
-	// TODO: Add time validation to add karma
-
-	return nil
 }

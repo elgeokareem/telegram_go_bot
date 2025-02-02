@@ -7,17 +7,36 @@ import (
 	"os"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-/*
-usersRankingTable
-id (autoincrement)
-user_id int
-first_name string
-last_name string
-username string
-karma int
-*/
+type PoolManager struct {
+	pools map[string]*pgxpool.Pool
+}
+
+func (pm *PoolManager) GetPool(dbName string) (*pgxpool.Pool, error) {
+	if pool, exists := pm.pools[dbName]; exists {
+		return pool, nil
+	}
+
+	conn, err := CreateDbConnection(dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert the single connection to a pool
+	poolConfig := pgxpool.Config{
+		ConnConfig: conn.Config(),
+		MaxConns:   10, // or whatever maximum number you want
+	}
+	pool, err := pgxpool.ConnectConfig(context.Background(), &poolConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	pm.pools[dbName] = pool
+	return pool, nil
+}
 
 func CreateDbConnection(dbName string) (*pgx.Conn, error) {
 	dbSchema := os.Getenv("DB_SCHEMA")
@@ -104,12 +123,42 @@ type UsersLovedHatedStruct struct {
 	Karma    int
 }
 
-func GetMostLovedUsers(conn *pgx.Conn, orderType string) ([]UsersLovedHatedStruct, error) {
-	sql := fmt.Sprintf(`
+func GetMostLovedUsers(conn *pgx.Conn) ([]UsersLovedHatedStruct, error) {
+	sql := `
+		SELECT CONCAT(first_name, ' ', last_name) as fullname, karma FROM users_ranking
+		WHERE karma > 0
+		ORDER BY karma DESC, fullname ASC
+	`
+
+	rows, err := conn.Query(context.Background(), sql)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []UsersLovedHatedStruct
+	for rows.Next() {
+		var user UsersLovedHatedStruct
+		if err := rows.Scan(&user.FullName, &user.Karma); err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+
+	// Check for any errors encountered during iteration
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+func GetMostHatedUsers(conn *pgx.Conn) ([]UsersLovedHatedStruct, error) {
+	sql := `
 		SELECT CONCAT(first_name, ' ', last_name) as fullname, karma FROM users_ranking
 		WHERE karma < 0
-		ORDER BY karma %s, fullname ASC
-	`, orderType)
+		ORDER BY karma ASC, fullname ASC
+	`
 
 	rows, err := conn.Query(context.Background(), sql)
 	if err != nil {
