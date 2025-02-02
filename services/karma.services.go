@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -122,41 +121,34 @@ func KarmaValidations(update structs.Update) error {
 func ProcessTelegramMessages(telegramUrl string, token string, offset int) (int, error) {
 	completeUrl := fmt.Sprintf("%s%s/getUpdates?offset=%d", telegramUrl, token, offset)
 
-	response, err := http.Get(completeUrl)
+	response, err := shared.CustomClient.Get(completeUrl)
 	if err != nil {
 		fmt.Println("ERROR http.Get(completeUrl)", err)
-		offset++
-		return offset, err
+		return offset + 1, err
 	}
 	defer response.Body.Close()
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		fmt.Println("ERROR ReadAll(response.Body)", err)
+		return offset + 1, err
 	}
 
 	var result structs.UpdateResponse
-	errBody := json.Unmarshal(body, &result)
-	if errBody != nil {
-		offset++
-		return offset, err
+	if err := json.Unmarshal(body, &result); err != nil {
+		return offset + 1, err
 	}
 
-	// * This is for loggin
-	// jsonData, err := json.MarshalIndent(result, "", "  ")
-	// fmt.Println(string(jsonData))
-
+	newOffset := offset
 	for _, update := range result.Result {
 		fmt.Println("UPDATE", update)
-		updateID := update.UpdateID
-		offset = updateID + 1
+		newOffset = update.UpdateID + 1
 
 		if update.Message == nil {
-			offset++
-			return offset, err
+			continue // Skip this update instead of returning
 		}
 
-		// TODO: Abstract later. Make this one and the one below one
+		// Handle /lovedusers command
 		if strings.HasPrefix(update.Message.Text, "/lovedusers@WillibertoBot") {
 			chatId := update.Message.Chat.ID
 			tableName := fmt.Sprintf("table_%d", chatId)
@@ -164,21 +156,19 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int) (int,
 			if err != nil {
 				conn.Close(context.Background())
 				fmt.Printf("Error connecting to the db. %s", err)
-				return offset, err
+				continue // Skip this update instead of returning
 			}
 
 			lovedUsers, err := GetMostLovedUsers(conn)
 			if err != nil {
 				fmt.Println("ERROR loved users")
-				return offset, err
+				continue // Skip this update instead of returning
 			}
 			fmt.Println(lovedUsers)
-
-			offset++
-			return offset, nil
+			continue // Move to next update
 		}
 
-		// TODO: Abstract later. Make this one and the one above one
+		// Handle /hatedusers command
 		if strings.HasPrefix(update.Message.Text, "/hatedusers@WillibertoBot") {
 			chatId := update.Message.Chat.ID
 			tableName := fmt.Sprintf("table_%d", chatId)
@@ -186,39 +176,32 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int) (int,
 			if err != nil {
 				conn.Close(context.Background())
 				fmt.Printf("Error connecting to the db. %s", err)
-				return offset, err
+				continue // Skip this update instead of returning
 			}
 
 			hatedUsers, err := GetMostHatedUsers(conn)
 			if err != nil {
 				fmt.Println("ERROR loved users")
-				return offset, err
+				continue // Skip this update instead of returning
 			}
 			fmt.Println(hatedUsers)
-
-			offset++
-			return offset, nil
+			continue // Move to next update
 		}
 
 		isPlusMinusOne := shared.ParsePlusMinusOneFromMessage(update.Message.Text)
-
 		if !isPlusMinusOne {
 			continue
 		}
 
 		// Validations for giving karma
-		err := KarmaValidations(update)
-		if err != nil {
-			offset++
-			return offset, err
+		if err := KarmaValidations(update); err != nil {
+			continue // Skip this update instead of returning
 		}
 
-		errKarma := AddKarmaToUser(update)
-		if err != nil {
-			offset++
-			return offset, errKarma
+		if err := AddKarmaToUser(update); err != nil {
+			continue // Skip this update instead of returning
 		}
 	}
 
-	return offset, nil
+	return newOffset, nil
 }

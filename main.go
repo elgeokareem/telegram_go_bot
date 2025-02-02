@@ -32,10 +32,7 @@ func main() {
 
 	for {
 		iteration++
-		// fmt.Println("OFFSET COMENZANDO", iteration)
-		// fmt.Println("Number of goroutines:", runtime.NumGoroutine())
 		offset, err = services.ProcessTelegramMessages(telegramUrl, token, offset)
-		// fmt.Println(offset)
 		if err != nil {
 			// log.Fatal(err). log.Fatal terminates the program
 			log.Println("ERROR: ", err)

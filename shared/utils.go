@@ -2,8 +2,20 @@ package shared
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
+	"time"
 )
+
+var CustomClient = &http.Client{
+	Timeout: time.Second * 30,
+	Transport: &http.Transport{
+		MaxIdleConns:       10,
+		IdleConnTimeout:    30 * time.Second,
+		DisableCompression: true,
+		DisableKeepAlives:  true,
+	},
+}
 
 func ParsePlusMinusOneFromMessage(message string) bool {
 	splittedMessage := strings.Split(message, " ")
