@@ -9,68 +9,59 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
 
-func AddKarmaToUser(update structs.Update) error {
+func AddKarmaToUser(update structs.Update, conn *pgx.Conn) error {
 	chatId := update.Message.Chat.ID
 	replyToMessageId := update.Message.ReplyToMessage.MessageID
-	tableName := fmt.Sprintf("table_%d", chatId)
 
-	currentMessage := update.Message
+	// currentMessage := update.Message
 	messageToGiveKarma := update.Message.ReplyToMessage.From
-
-	// Aqui se crea la conexion a la tabla
-	fmt.Println("TABLE NAME", tableName)
-	conn, err := CreateDbConnection(tableName)
-	if err != nil {
-		conn.Close(context.Background())
-		fmt.Printf("Error connecting to the db. %s", err)
-		return err
-	}
-
-	defer conn.Close(context.Background())
 
 	// TODO: Probably put it in another place. All validations should be together.
 	// Check if User can give karma given time constriction
 	// CheckLastTimeUserGaveKarma(conn, currentMessage)
 
 	sqlToAddKarma := `
-		INSERT INTO users_ranking (user_id, first_name, last_name, username, karma, last_karma_given)
-		VALUES ($1, $2, $3, $4, 1, $5)
-		ON CONFLICT (user_id)
+		INSERT INTO users_ranking (user_id, group_id, first_name, last_name, username, karma, last_karma_given)
+		VALUES ($1, $2, $3, $4, $5, 1, $6)
+		ON CONFLICT (user_id, group_id)
 		DO UPDATE SET
 			first_name = EXCLUDED.first_name,
 			last_name = EXCLUDED.last_name,
 			username = EXCLUDED.username,
 			karma = users_ranking.karma + 1,
 			last_karma_given = EXCLUDED.last_karma_given
+    RETURNING karma
 	`
 
-	currentMessageJSON, _ := json.MarshalIndent(currentMessage, "", "  ")
-	fmt.Printf("CURRENT MESSAGE: %s\n", string(currentMessageJSON))
+	// currentMessageJSON, _ := json.MarshalIndent(currentMessage, "", "  ")
+	// fmt.Printf("CURRENT MESSAGE: %s\n", string(currentMessageJSON))
+	//
+	// messageToGiveKarmaJSON, _ := json.MarshalIndent(messageToGiveKarma, "", "  ")
+	// fmt.Printf("MESSAGE TO GIVE KARMA: %s\n", string(messageToGiveKarmaJSON))
 
-	messageToGiveKarmaJSON, _ := json.MarshalIndent(messageToGiveKarma, "", "  ")
-	fmt.Printf("MESSAGE TO GIVE KARMA: %s\n", string(messageToGiveKarmaJSON))
-
-	_, err = conn.Exec(
+	var totalKarma int
+	err := conn.QueryRow(
 		context.Background(),
 		sqlToAddKarma,
 		messageToGiveKarma.ID,
+		chatId,
 		messageToGiveKarma.FirstName,
 		messageToGiveKarma.LastName,
 		messageToGiveKarma.Username,
-		nil,
-	)
-
-	fmt.Println("ERROR", err)
-
+		time.Now(),
+	).Scan(&totalKarma)
 	if err != nil {
+		SendMessageWithReply(chatId, replyToMessageId, "Error adding karma")
 		return fmt.Errorf("unable to upsert user ranking: %w", err)
 	}
 
-	SendMessageWithReply(chatId, replyToMessageId, "testt")
+	successMessage := fmt.Sprintf("Karma added to %s. Total karma: %d", messageToGiveKarma.FirstName, totalKarma)
+	SendMessageWithReply(chatId, replyToMessageId, successMessage)
 
 	return nil
 }
@@ -118,7 +109,7 @@ func KarmaValidations(update structs.Update) error {
 	return nil
 }
 
-func ProcessTelegramMessages(telegramUrl string, token string, offset int) (int, error) {
+func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn *pgx.Conn) (int, error) {
 	completeUrl := fmt.Sprintf("%s%s/getUpdates?offset=%d", telegramUrl, token, offset)
 
 	response, err := shared.CustomClient.Get(completeUrl)
@@ -141,7 +132,6 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int) (int,
 
 	newOffset := offset
 	for _, update := range result.Result {
-		fmt.Println("UPDATE", update)
 		newOffset = update.UpdateID + 1
 
 		if update.Message == nil {
@@ -198,7 +188,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int) (int,
 			continue // Skip this update instead of returning
 		}
 
-		if err := AddKarmaToUser(update); err != nil {
+		if err := AddKarmaToUser(update, conn); err != nil {
 			continue // Skip this update instead of returning
 		}
 	}

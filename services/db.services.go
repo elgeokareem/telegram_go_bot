@@ -40,8 +40,9 @@ func (pm *PoolManager) GetPool(dbName string) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-func CreateDbConnection(dbName string) (*pgx.Conn, error) {
+func CreateDbConnection(tableName string) (*pgx.Conn, error) {
 	dbSchema := os.Getenv("DB_SCHEMA")
+	dbName := os.Getenv("DB_NAME")
 	dbUser := os.Getenv("DB_USER")
 	dbPassword := os.Getenv("DB_PASSWORD")
 	dbHost := os.Getenv("DB_HOST")
@@ -97,7 +98,7 @@ func databaseExists(conn *pgx.Conn, dbName string) (bool, error) {
 
 func createDatabase(conn *pgx.Conn, dbName string) error {
 	// Safely quote the identifier
-	dbName = pgx.Identifier{dbName}.Sanitize()
+	// dbName = pgx.Identifier{dbName}.Sanitize()
 
 	_, err := conn.Exec(context.Background(), fmt.Sprintf("CREATE DATABASE %s", dbName))
 	return err
@@ -107,12 +108,16 @@ func createUsersRankingTable(conn *pgx.Conn) error {
 	sql := `
 		CREATE TABLE IF NOT EXISTS users_ranking (
 			id SERIAL PRIMARY KEY,
+      group_id BIGINT NOT NULL,
 			user_id BIGINT NOT NULL UNIQUE,
 			first_name VARCHAR(255),
 			last_name VARCHAR(255),
 			username VARCHAR(255),
 			karma INT,
-			last_karma_given TIMESTAMP
+			last_karma_given TIMESTAMP,
+      allowed_to_give_karma BOOLEAN DEFAULT TRUE,
+      allowed_to_receive_karma BOOLEAN DEFAULT TRUE,
+      UNIQUE(user_id, group_id)
 		)
 	`
 

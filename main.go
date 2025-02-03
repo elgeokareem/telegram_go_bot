@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -22,7 +23,7 @@ func main() {
 	}
 
 	// Init main DB
-	_, errDb := services.CreateDbConnection(dbName)
+	conn, errDb := services.CreateDbConnection(dbName)
 	if errDb != nil {
 		fmt.Printf("Error connecting to the db. %s", errDb)
 		return
@@ -32,10 +33,11 @@ func main() {
 
 	for {
 		iteration++
-		offset, err = services.ProcessTelegramMessages(telegramUrl, token, offset)
+		offset, err = services.ProcessTelegramMessages(telegramUrl, token, offset, conn)
 		if err != nil {
 			// log.Fatal(err). log.Fatal terminates the program
 			log.Println("ERROR: ", err)
 		}
+		time.Sleep(1 * time.Second)
 	}
 }
