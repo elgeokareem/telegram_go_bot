@@ -17,12 +17,21 @@ var CustomClient = &http.Client{
 	},
 }
 
-func ParsePlusMinusOneFromMessage(message string) bool {
+func ParsePlusMinusOneFromMessage(message string) (bool, *int) {
 	splittedMessage := strings.Split(message, " ")
 	isPlusOne := splittedMessage[0] == "+1"
 	isMinusOne := splittedMessage[0] == "-1"
 
-	return isPlusOne || isMinusOne
+	var value int
+	if isPlusOne {
+		value = 1
+		return true, &value
+	} else if isMinusOne {
+		value = -1
+		return true, &value
+	} else {
+		return false, nil
+	}
 }
 
 func CreateDbString(schema string, user string, password string, host string, port string, dbName string) string {

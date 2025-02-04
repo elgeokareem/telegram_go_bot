@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func AddKarmaToUser(update structs.Update, conn *pgx.Conn) error {
+func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) error {
 	chatId := update.Message.Chat.ID
 	replyToMessageId := update.Message.ReplyToMessage.MessageID
 
@@ -27,22 +27,22 @@ func AddKarmaToUser(update structs.Update, conn *pgx.Conn) error {
 
 	sqlToAddKarma := `
 		INSERT INTO users_ranking (user_id, group_id, first_name, last_name, username, karma, last_karma_given)
-		VALUES ($1, $2, $3, $4, $5, 1, $6)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (user_id, group_id)
 		DO UPDATE SET
 			first_name = EXCLUDED.first_name,
 			last_name = EXCLUDED.last_name,
 			username = EXCLUDED.username,
-			karma = users_ranking.karma + 1,
+			karma = users_ranking.karma + $6,
 			last_karma_given = EXCLUDED.last_karma_given
     RETURNING karma
 	`
 
-	// currentMessageJSON, _ := json.MarshalIndent(currentMessage, "", "  ")
-	// fmt.Printf("CURRENT MESSAGE: %s\n", string(currentMessageJSON))
-	//
-	// messageToGiveKarmaJSON, _ := json.MarshalIndent(messageToGiveKarma, "", "  ")
-	// fmt.Printf("MESSAGE TO GIVE KARMA: %s\n", string(messageToGiveKarmaJSON))
+	currentMessageJSON, _ := json.MarshalIndent(update.Message, "", "  ")
+	fmt.Printf("CURRENT MESSAGE: %s\n", string(currentMessageJSON))
+
+	messageToGiveKarmaJSON, _ := json.MarshalIndent(messageToGiveKarma, "", "  ")
+	fmt.Printf("MESSAGE TO GIVE KARMA: %s\n", string(messageToGiveKarmaJSON))
 
 	var totalKarma int
 	err := conn.QueryRow(
@@ -53,6 +53,7 @@ func AddKarmaToUser(update structs.Update, conn *pgx.Conn) error {
 		messageToGiveKarma.FirstName,
 		messageToGiveKarma.LastName,
 		messageToGiveKarma.Username,
+		karmaValue,
 		time.Now(),
 	).Scan(&totalKarma)
 	if err != nil {
@@ -178,7 +179,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 			continue // Move to next update
 		}
 
-		isPlusMinusOne := shared.ParsePlusMinusOneFromMessage(update.Message.Text)
+		isPlusMinusOne, karmaValue := shared.ParsePlusMinusOneFromMessage(update.Message.Text)
 		if !isPlusMinusOne {
 			continue
 		}
@@ -188,7 +189,8 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 			continue // Skip this update instead of returning
 		}
 
-		if err := AddKarmaToUser(update, conn); err != nil {
+		if err := AddKarmaToUser(update, karmaValue, conn); err != nil {
+			fmt.Println("ERROR AddKarmaToUser", err)
 			continue // Skip this update instead of returning
 		}
 	}
