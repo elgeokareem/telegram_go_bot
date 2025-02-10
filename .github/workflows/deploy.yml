@@ -3,7 +3,7 @@ name: Deploy to Linode
 on:
   push:
     branches:
-      - main
+      - master
 
 jobs:
   deploy:
@@ -27,4 +27,3 @@ jobs:
             cd /opt/telegram_go_bot/
             ./deploy.sh
           EOF
-
