@@ -1,0 +1,30 @@
+name: Deploy to Linode
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2: Set up SSH
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      # Step 3: Deploy to Linode
+      - name: Deploy to Linode
+        run: |
+          ssh -o StrictHostKeyChecking=no user@your-linode-ip << 'EOF'
+            cd /opt/telegram_go_bot/
+            ./deploy.sh
+          EOF
+

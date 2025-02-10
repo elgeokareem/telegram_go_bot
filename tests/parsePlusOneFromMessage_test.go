@@ -10,9 +10,9 @@ func TestParsePlusOneFromMessage(t *testing.T) {
 	expected := [3]bool{true, false, false}
 
 	for i, v := range testArray {
-		result := shared.ParsePlusMinusOneFromMessage(v)
+		plusMinus, _ := shared.ParsePlusMinusOneFromMessage(v)
 
-		if result != expected[i] {
+		if plusMinus != expected[i] {
 			t.Errorf("\"%s\" correct result is %t", testArray[i], expected[i])
 		}
 	}
