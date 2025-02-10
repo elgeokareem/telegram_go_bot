@@ -100,7 +100,7 @@ func KarmaValidations(update structs.Update) error {
 
 	// If user try to give karma to itself
 	if update.Message.ReplyToMessage.From.ID == update.Message.From.ID {
-		SendMessageWithReply(chatId, replyToMessageId, "Wew. You can't give karma to yourself dummy.")
+		SendMessageWithReply(chatId, replyToMessageId, "Wew. You can't give karma to yourself dummy ~")
 		return errors.New("can't give karma to yourself")
 	}
 
