@@ -14,10 +14,10 @@ type ErrorRecordInput struct {
 
 func CreateErrorRecord(conn *pgx.Conn, input ErrorRecordInput) error {
 	sqlInsertErrorRecord := `
-		INSERT INTO bot_errors (user_id, group_id, error)
+		INSERT INTO bot_errors (sender_id, group_id, error)
 		VALUES ($1, $2, $3)
 	`
 
-	_, err := conn.Exec(context.Background(), sqlInsertErrorRecord)
+	_, err := conn.Exec(context.Background(), sqlInsertErrorRecord, input.SenderID, input.GroupID, input.Error)
 	return err
 }

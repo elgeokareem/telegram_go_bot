@@ -197,7 +197,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		if err := AddKarmaToUser(update, karmaValue, conn); err != nil {
 			errorInput := ErrorRecordInput{
 				SenderID: update.Message.ReplyToMessage.From.ID,
-				GroupID:  update.Message.Chat.ID,
+				GroupID:  chatId,
 				Error:    err.Error(),
 			}
 			SendMessageWithReply(chatId, senderMessageId, "Error adding karma")
