@@ -202,7 +202,7 @@ func createErrorsTable(conn *pgx.Conn) error {
 			id SERIAL PRIMARY KEY,
       group_id BIGINT NOT NULL,
 			user_id BIGINT NOT NULL UNIQUE,
-      error TEXT
+      error TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
