@@ -57,7 +57,13 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 		time.Now(),
 	).Scan(&totalKarma)
 	if err != nil {
+		errorInput := ErrorRecordInput{
+			UserID:  &messageToGiveKarma.ID,
+			GroupID: &chatId,
+			Error:   err.Error(),
+		}
 		SendMessageWithReply(chatId, replyToMessageId, "Error adding karma")
+		CreateErrorRecord(conn, errorInput)
 		return fmt.Errorf("unable to upsert user ranking: %w", err)
 	}
 
