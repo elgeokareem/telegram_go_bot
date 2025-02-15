@@ -38,11 +38,11 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
     RETURNING karma
 	`
 
-	currentMessageJSON, _ := json.MarshalIndent(update.Message, "", "  ")
-	fmt.Printf("CURRENT MESSAGE: %s\n", string(currentMessageJSON))
-
-	messageToGiveKarmaJSON, _ := json.MarshalIndent(messageToGiveKarma, "", "  ")
-	fmt.Printf("MESSAGE TO GIVE KARMA: %s\n", string(messageToGiveKarmaJSON))
+	// currentMessageJSON, _ := json.MarshalIndent(update.Message, "", "  ")
+	// fmt.Printf("CURRENT MESSAGE: %s\n", string(currentMessageJSON))
+	//
+	// messageToGiveKarmaJSON, _ := json.MarshalIndent(messageToGiveKarma, "", "  ")
+	// fmt.Printf("MESSAGE TO GIVE KARMA: %s\n", string(messageToGiveKarmaJSON))
 
 	var totalKarma int
 	err := conn.QueryRow(
@@ -57,14 +57,7 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 		time.Now(),
 	).Scan(&totalKarma)
 	if err != nil {
-		errorInput := ErrorRecordInput{
-			UserID:  &messageToGiveKarma.ID,
-			GroupID: &chatId,
-			Error:   err.Error(),
-		}
-		SendMessageWithReply(chatId, replyToMessageId, "Error adding karma")
-		CreateErrorRecord(conn, errorInput)
-		return fmt.Errorf("unable to upsert user ranking: %w", err)
+		return err
 	}
 
 	successMessage := fmt.Sprintf("Karma added to %s. Total karma: %d", messageToGiveKarma.FirstName, totalKarma)
@@ -128,7 +121,10 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		fmt.Println("ERROR ReadAll(response.Body)", err)
+		errorInput := ErrorRecordInput{
+			Error: err.Error(),
+		}
+		CreateErrorRecord(conn, errorInput)
 		return offset + 1, err
 	}
 
@@ -144,6 +140,9 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		if update.Message == nil {
 			continue // Skip this update instead of returning
 		}
+
+		chatId := update.Message.Chat.ID
+		senderMessageId := update.Message.MessageID
 
 		// Handle /lovedusers command
 		if strings.HasPrefix(update.Message.Text, "/lovedusers@WillibertoBot") {
@@ -196,7 +195,13 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		}
 
 		if err := AddKarmaToUser(update, karmaValue, conn); err != nil {
-			fmt.Println("ERROR AddKarmaToUser", err)
+			errorInput := ErrorRecordInput{
+				SenderID: update.Message.ReplyToMessage.From.ID,
+				GroupID:  update.Message.Chat.ID,
+				Error:    err.Error(),
+			}
+			SendMessageWithReply(chatId, senderMessageId, "Error adding karma")
+			CreateErrorRecord(conn, errorInput)
 			continue // Skip this update instead of returning
 		}
 	}

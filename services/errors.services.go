@@ -7,9 +7,9 @@ import (
 )
 
 type ErrorRecordInput struct {
-	GroupID *int64
-	UserID  *int64
-	Error   string
+	GroupID  int64
+	SenderID int64
+	Error    string
 }
 
 func CreateErrorRecord(conn *pgx.Conn, input ErrorRecordInput) error {

@@ -200,8 +200,8 @@ func createErrorsTable(conn *pgx.Conn) error {
 	sql := `
 		CREATE TABLE IF NOT EXISTS bot_errors (
 			id SERIAL PRIMARY KEY,
-      group_id BIGINT NOT NULL,
-			user_id BIGINT NOT NULL UNIQUE,
+      group_id BIGINT,
+			sender_id BIGINT,
       error TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
