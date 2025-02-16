@@ -17,8 +17,6 @@ import (
 func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) error {
 	chatId := update.Message.Chat.ID
 	replyToMessageId := update.Message.ReplyToMessage.MessageID
-
-	// currentMessage := update.Message
 	messageToGiveKarma := update.Message.ReplyToMessage.From
 
 	// TODO: Probably put it in another place. All validations should be together.
@@ -196,9 +194,10 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 
 		if err := AddKarmaToUser(update, karmaValue, conn); err != nil {
 			errorInput := ErrorRecordInput{
-				SenderID: update.Message.ReplyToMessage.From.ID,
-				GroupID:  chatId,
-				Error:    err.Error(),
+				SenderID:   update.Message.ReplyToMessage.From.ID,
+				ReceiverID: update.Message.From.ID,
+				GroupID:    chatId,
+				Error:      err.Error(),
 			}
 			SendMessageWithReply(chatId, senderMessageId, "Error adding karma")
 			CreateErrorRecord(conn, errorInput)

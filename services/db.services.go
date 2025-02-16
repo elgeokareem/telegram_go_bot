@@ -115,7 +115,7 @@ func createUsersRankingTable(conn *pgx.Conn) error {
 		CREATE TABLE IF NOT EXISTS users_ranking (
 			id SERIAL PRIMARY KEY,
       group_id BIGINT NOT NULL,
-			user_id BIGINT NOT NULL UNIQUE,
+			user_id BIGINT NOT NULL,
 			first_name VARCHAR(255),
 			last_name VARCHAR(255),
 			username VARCHAR(255),
@@ -202,6 +202,7 @@ func createErrorsTable(conn *pgx.Conn) error {
 			id SERIAL PRIMARY KEY,
       group_id BIGINT,
 			sender_id BIGINT,
+      receiver_id BIGINT,
       error TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
