@@ -17,8 +17,6 @@ import (
 func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) error {
 	chatId := update.Message.Chat.ID
 	replyToMessageId := update.Message.ReplyToMessage.MessageID
-
-	// currentMessage := update.Message
 	messageToGiveKarma := update.Message.ReplyToMessage.From
 
 	// TODO: Probably put it in another place. All validations should be together.
@@ -38,11 +36,11 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
     RETURNING karma
 	`
 
-	currentMessageJSON, _ := json.MarshalIndent(update.Message, "", "  ")
-	fmt.Printf("CURRENT MESSAGE: %s\n", string(currentMessageJSON))
-
-	messageToGiveKarmaJSON, _ := json.MarshalIndent(messageToGiveKarma, "", "  ")
-	fmt.Printf("MESSAGE TO GIVE KARMA: %s\n", string(messageToGiveKarmaJSON))
+	// currentMessageJSON, _ := json.MarshalIndent(update.Message, "", "  ")
+	// fmt.Printf("CURRENT MESSAGE: %s\n", string(currentMessageJSON))
+	//
+	// messageToGiveKarmaJSON, _ := json.MarshalIndent(messageToGiveKarma, "", "  ")
+	// fmt.Printf("MESSAGE TO GIVE KARMA: %s\n", string(messageToGiveKarmaJSON))
 
 	var totalKarma int
 	err := conn.QueryRow(
@@ -57,8 +55,7 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 		time.Now(),
 	).Scan(&totalKarma)
 	if err != nil {
-		SendMessageWithReply(chatId, replyToMessageId, "Error adding karma")
-		return fmt.Errorf("unable to upsert user ranking: %w", err)
+		return err
 	}
 
 	successMessage := fmt.Sprintf("Karma added to %s. Total karma: %d", messageToGiveKarma.FirstName, totalKarma)
@@ -100,7 +97,7 @@ func KarmaValidations(update structs.Update) error {
 
 	// If user try to give karma to itself
 	if update.Message.ReplyToMessage.From.ID == update.Message.From.ID {
-		SendMessageWithReply(chatId, replyToMessageId, "You can't give karma to yourself dummy")
+		SendMessageWithReply(chatId, replyToMessageId, "Wew. You can't give karma to yourself dummy ~")
 		return errors.New("can't give karma to yourself")
 	}
 
@@ -122,7 +119,10 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		fmt.Println("ERROR ReadAll(response.Body)", err)
+		errorInput := ErrorRecordInput{
+			Error: err.Error(),
+		}
+		CreateErrorRecord(conn, errorInput)
 		return offset + 1, err
 	}
 
@@ -138,6 +138,9 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		if update.Message == nil {
 			continue // Skip this update instead of returning
 		}
+
+		chatId := update.Message.Chat.ID
+		senderMessageId := update.Message.MessageID
 
 		// Handle /lovedusers command
 		if strings.HasPrefix(update.Message.Text, "/lovedusers@WillibertoBot") {
@@ -190,7 +193,14 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		}
 
 		if err := AddKarmaToUser(update, karmaValue, conn); err != nil {
-			fmt.Println("ERROR AddKarmaToUser", err)
+			errorInput := ErrorRecordInput{
+				SenderID:   update.Message.ReplyToMessage.From.ID,
+				ReceiverID: update.Message.From.ID,
+				GroupID:    chatId,
+				Error:      err.Error(),
+			}
+			SendMessageWithReply(chatId, senderMessageId, "Error adding karma")
+			CreateErrorRecord(conn, errorInput)
 			continue // Skip this update instead of returning
 		}
 	}

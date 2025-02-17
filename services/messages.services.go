@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bot/telegram/shared"
 	"net/http"
 	"net/url"
 	"os"
@@ -29,7 +30,7 @@ func SendMessage(chatId int64, message string) {
 	defer resp.Body.Close()
 }
 
-func SendMessageWithReply(chatId int64, replyToMessageId int, message string) {
+func SendMessageWithReply[T ~int | ~int64](chatId int64, replyToMessageId T, message string) {
 	// Define the base URL
 	token := os.Getenv("TOKEN")
 	telegramUrl := os.Getenv("TELEGRAM_BASE_URL")
@@ -45,7 +46,7 @@ func SendMessageWithReply(chatId int64, replyToMessageId int, message string) {
 	completeUrl := baseUrl + "?" + data.Encode()
 
 	// Send the HTTP request
-	resp, err := http.Get(completeUrl)
+	resp, err := shared.CustomClient.Get(completeUrl)
 	if err != nil {
 		panic(err)
 	}

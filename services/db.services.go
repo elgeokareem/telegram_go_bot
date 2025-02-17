@@ -87,6 +87,12 @@ func CreateDbConnection(tableName string) (*pgx.Conn, error) {
 		return nil, fmt.Errorf("unable to create users_ranking table: %w", err)
 	}
 
+	err = createErrorsTable(newConn)
+	if err != nil {
+		newConn.Close(context.Background())
+		return nil, fmt.Errorf("unable to create bot_errors table: %w", err)
+	}
+
 	return newConn, err
 }
 
@@ -109,7 +115,7 @@ func createUsersRankingTable(conn *pgx.Conn) error {
 		CREATE TABLE IF NOT EXISTS users_ranking (
 			id SERIAL PRIMARY KEY,
       group_id BIGINT NOT NULL,
-			user_id BIGINT NOT NULL UNIQUE,
+			user_id BIGINT NOT NULL,
 			first_name VARCHAR(255),
 			last_name VARCHAR(255),
 			username VARCHAR(255),
@@ -190,12 +196,19 @@ func GetMostHatedUsers(conn *pgx.Conn) ([]UsersLovedHatedStruct, error) {
 	return users, nil
 }
 
-// TODO: implement this function but later.
-func CreateGroupListTable(conn *pgx.Conn) error {
+func createErrorsTable(conn *pgx.Conn) error {
 	sql := `
-		CREATE TABLE IF NOT EXISTS all_groups (
-		)
+		CREATE TABLE IF NOT EXISTS bot_errors (
+			id SERIAL PRIMARY KEY,
+      group_id BIGINT,
+			sender_id BIGINT,
+      receiver_id BIGINT,
+      error TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
 	`
+
 	_, err := conn.Exec(context.Background(), sql)
 	return err
 }
