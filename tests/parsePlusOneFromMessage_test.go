@@ -6,14 +6,25 @@ import (
 )
 
 func TestParsePlusOneFromMessage(t *testing.T) {
-	testArray := [3]string{"+1 este mensaje si es cool", "ayy lmao kekerinos +1", "no vale esto merece un +1 jeje"}
-	expected := [3]bool{true, false, false}
+	testArray := [4]string{"+1 este mensaje si es cool", "ayy lmao kekerinos +1", "no vale esto merece un -1 jeje", "-1 esto si menos 1"}
+
+	one := 1
+	minusOne := -1
+	expected := [4]struct {
+		isPlusMinus bool
+		value       *int
+	}{
+		{true, &one},
+		{false, &one},
+		{false, &minusOne},
+		{true, &minusOne},
+	}
 
 	for i, v := range testArray {
-		result := shared.ParsePlusMinusOneFromMessage(v)
+		isPlusMinus, _ := shared.ParsePlusMinusOneFromMessage(v)
 
-		if result != expected[i] {
-			t.Errorf("\"%s\" correct result is %t", testArray[i], expected[i])
+		if isPlusMinus != expected[i].isPlusMinus {
+			t.Errorf("\"%s\" correct result is %t", testArray[i], expected[i].isPlusMinus)
 		}
 	}
 }
