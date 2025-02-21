@@ -119,10 +119,6 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		errorInput := ErrorRecordInput{
-			Error: err.Error(),
-		}
-		CreateErrorRecord(conn, errorInput)
 		return offset + 1, err
 	}
 
@@ -193,7 +189,6 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		}
 
 		if err := AddKarmaToUser(update, karmaValue, conn); err != nil {
-			fmt.Println("ERROR ADDING KARMA 1", err.Error())
 			errorInput := ErrorRecordInput{
 				SenderID:   update.Message.ReplyToMessage.From.ID,
 				ReceiverID: update.Message.From.ID,
@@ -201,7 +196,6 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 				Error:      err.Error(),
 			}
 			SendMessageWithReply(chatId, senderMessageId, "Error adding karma")
-			fmt.Println("ERROR ADDING KARMA 2", err.Error())
 			CreateErrorRecord(conn, errorInput)
 			continue // Skip this update instead of returning
 		}

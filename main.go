@@ -26,17 +26,22 @@ func main() {
 	conn, errDb := services.CreateDbConnection(dbName)
 	if errDb != nil {
 		fmt.Printf("Error connecting to the db. %s", errDb)
+		errorInput := services.ErrorRecordInput{
+			Error: errDb.Error(),
+		}
+		services.CreateErrorRecord(conn, errorInput)
 		return
 	}
 
-	iteration := 0
-
 	for {
-		iteration++
 		offset, err = services.ProcessTelegramMessages(telegramUrl, token, offset, conn)
 		if err != nil {
 			// log.Fatal(err). log.Fatal terminates the program
 			log.Println("ERROR: ", err)
+			errorInput := services.ErrorRecordInput{
+				Error: err.Error(),
+			}
+			services.CreateErrorRecord(conn, errorInput)
 		}
 		time.Sleep(1 * time.Second)
 	}
