@@ -200,6 +200,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 				Error:      err.Error(),
 			}
 			SendMessageWithReply(chatId, senderMessageId, "Error adding karma")
+			fmt.Println("ERROR ADDING KARMA", err.Error())
 			CreateErrorRecord(conn, errorInput)
 			continue // Skip this update instead of returning
 		}
