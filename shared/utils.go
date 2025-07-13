@@ -8,12 +8,16 @@ import (
 )
 
 var CustomClient = &http.Client{
-	Timeout: time.Second * 30,
+	Timeout: time.Second * 60, // Consider increasing this slightly too
 	Transport: &http.Transport{
-		MaxIdleConns:       10,
-		IdleConnTimeout:    30 * time.Second,
-		DisableCompression: true,
-		DisableKeepAlives:  true,
+		MaxIdleConns:       100,              // Default is 100, 10 is a bit low if you expect concurrent requests
+		IdleConnTimeout:    90 * time.Second, // Default is 90s
+		DisableCompression: false,            // Enable compression for efficiency
+		// DisableKeepAlives: false, // Or remove this line entirely
+		MaxIdleConnsPerHost:   10, // Good to set this, often same as MaxIdleConns for single host
+		ExpectContinueTimeout: 1 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second, // Timeout for reading response headers
 	},
 }
 

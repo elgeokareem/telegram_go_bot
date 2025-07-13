@@ -2,19 +2,19 @@ https://github.com/jackc/pgx
 
 https://github.com/go-saas/saas nultitenants library
 
-example response
-
-schema for the default tenant
-id (autoincrement)
-group_id (unique)
-group_name
-
-CONSTRAINS for the karma
-The user can only give karma to other users
-The user can only give karma to other users in the same group
-The user can only give karma to other users in the same group once a minute
-Add a flag that to check if the user is able to give karma (FOR THE FUTURE)
-
+TODO:
+1- Make table for users
+2- Make table for groups
+3- Make table for user per group.
+  3.1 - Ex. For a user to know which is the last time it gave karma in the group, and how much karma has given and taken in that group.
+  create table user_group (
+    id serial primary key,
+    user_id integer not null references users(id),
+    group_id integer not null references groups(id),
+    karma_given integer default 0,
+    karma_taken integer default 0,
+    last_karma_given timestamp with time zone
+  )
 
 {
   "ok": true,
