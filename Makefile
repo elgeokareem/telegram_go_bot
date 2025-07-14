@@ -19,7 +19,7 @@ migrate-up:
 ## Revert the last applied migration
 migrate-down:
 	@echo "Running down migrations..."
-	@go run migrate.go down
+	@go run ./database/migrate.go down
 
 build:
 	@go build -o telegram_go_bot .
