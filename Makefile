@@ -14,7 +14,7 @@ DB_URL := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?
 ## Run all pending up migrations
 migrate-up:
 	@echo "Running up migrations..."
-	@go run migrate.go up
+	@go run ./database/migrate.go up
 
 ## Revert the last applied migration
 migrate-down:
