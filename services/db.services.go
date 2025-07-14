@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -119,16 +120,49 @@ func createUsersRankingTable(conn *pgx.Conn) error {
 			first_name VARCHAR(255),
 			last_name VARCHAR(255),
 			username VARCHAR(255),
-			karma INT,
+			karma INT DEFAULT 0,
 			last_karma_given TIMESTAMP,
       allowed_to_give_karma BOOLEAN DEFAULT TRUE,
       allowed_to_receive_karma BOOLEAN DEFAULT TRUE,
+      karma_given INT DEFAULT 0,
       UNIQUE(user_id, group_id)
 		)
 	`
 
 	_, err := conn.Exec(context.Background(), sql)
 	return err
+}
+
+func UpsertUserKarma(conn *pgx.Conn, userID int64, groupID int64, firstName, lastName, username string, karmaValue int) (int, error) {
+	sql := `
+    INSERT INTO users_ranking (user_id, group_id, first_name, last_name, username, karma, last_karma_given)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    ON CONFLICT (user_id, group_id)
+    DO UPDATE SET
+      first_name = EXCLUDED.first_name,
+      last_name = EXCLUDED.last_name,
+      username = EXCLUDED.username,
+      karma = users_ranking.karma + $6,
+      last_karma_given = EXCLUDED.last_karma_given
+    RETURNING karma
+  `
+
+	var totalKarma int
+	err := conn.QueryRow(
+		context.Background(),
+		sql,
+		userID,
+		groupID,
+		firstName,
+		lastName,
+		username,
+		karmaValue,
+		time.Now(),
+	).Scan(&totalKarma)
+	if err != nil {
+		return 0, err
+	}
+	return totalKarma, nil
 }
 
 type UsersLovedHatedStruct struct {

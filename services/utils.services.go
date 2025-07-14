@@ -24,6 +24,8 @@ func KarmaValidations(update structs.Update, conn *pgx.Conn) error {
 		return errors.New("can't give karma to yourself")
 	}
 
+	// If user is not inside the time frame
+
 	if err := UpdateKarmaGivenTimeOfUser(conn, update.Message); err != nil {
 		return err
 	}
@@ -39,7 +41,7 @@ func UpdateKarmaGivenTimeOfUser(conn *pgx.Conn, currentMessage *structs.Message)
 
 	var lastMessageDateTime time.Time
 	err := conn.QueryRow(context.Background(), "SELECT last_karma_given FROM users_ranking WHERE user_id = $1 AND group_id = $2", currentMessage.From.ID, currentMessage.Chat.ID).Scan(&lastMessageDateTime)
-
+	fmt.Printf("Error after queryRow/scan: %v\n", err)
 	fmt.Printf("1 Last message date time: %s\n", lastMessageDateTime)
 
 	if err != nil && err != pgx.ErrNoRows {
@@ -49,6 +51,20 @@ func UpdateKarmaGivenTimeOfUser(conn *pgx.Conn, currentMessage *structs.Message)
 	fmt.Printf("2 Last message date time: %s\n", lastMessageDateTime)
 
 	if err == pgx.ErrNoRows {
+		_, errUpsert := UpsertUserKarma(
+			conn,
+			currentMessage.From.ID,
+			chatId,
+			currentMessage.From.FirstName,
+			currentMessage.From.LastName,
+			currentMessage.From.Username,
+			0,
+		)
+
+		if errUpsert != nil {
+			return err
+		}
+
 		return nil
 	}
 

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -18,41 +17,15 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 	replyToMessageId := update.Message.ReplyToMessage.MessageID
 	messageToGiveKarma := update.Message.ReplyToMessage.From
 
-	// TODO: Probably put it in another place. All validations should be together.
-	// Check if User can give karma given time constriction
-	// CheckLastTimeUserGaveKarma(conn, currentMessage)
-
-	sqlToAddKarma := `
-		INSERT INTO users_ranking (user_id, group_id, first_name, last_name, username, karma, last_karma_given)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (user_id, group_id)
-		DO UPDATE SET
-			first_name = EXCLUDED.first_name,
-			last_name = EXCLUDED.last_name,
-			username = EXCLUDED.username,
-			karma = users_ranking.karma + $6,
-			last_karma_given = EXCLUDED.last_karma_given
-    RETURNING karma
-	`
-
-	// currentMessageJSON, _ := json.MarshalIndent(update.Message, "", "  ")
-	// fmt.Printf("CURRENT MESSAGE: %s\n", string(currentMessageJSON))
-	//
-	// messageToGiveKarmaJSON, _ := json.MarshalIndent(messageToGiveKarma, "", "  ")
-	// fmt.Printf("MESSAGE TO GIVE KARMA: %s\n", string(messageToGiveKarmaJSON))
-
-	var totalKarma int
-	err := conn.QueryRow(
-		context.Background(),
-		sqlToAddKarma,
+	totalKarma, err := UpsertUserKarma(
+		conn,
 		messageToGiveKarma.ID,
 		chatId,
 		messageToGiveKarma.FirstName,
 		messageToGiveKarma.LastName,
 		messageToGiveKarma.Username,
-		karmaValue,
-		time.Now(),
-	).Scan(&totalKarma)
+		*karmaValue, // Dereference karmaValue here
+	)
 	if err != nil {
 		return err
 	}

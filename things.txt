@@ -4,7 +4,7 @@ https://github.com/go-saas/saas nultitenants library
 
 TODO:
 1- Make table for users
-2- Make table for groups
+2- Make table for groups (here we can do the settings)
 3- Make table for user per group.
   3.1 - Ex. For a user to know which is the last time it gave karma in the group, and how much karma has given and taken in that group.
   create table user_group (
@@ -15,6 +15,8 @@ TODO:
     karma_taken integer default 0,
     last_karma_given timestamp with time zone
   )
+4- make time restriction for karma given.
+5- ban chris
 
 {
   "ok": true,
