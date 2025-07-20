@@ -122,6 +122,12 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 
 		// Validations for giving karma
 		if err := KarmaValidations(update, conn); err != nil {
+			CreateErrorRecord(conn, ErrorRecordInput{
+				GroupID:    chatId,
+				SenderID:   update.Message.From.ID,
+				ReceiverID: update.Message.ReplyToMessage.From.ID,
+				Error:      err.Error(),
+			})
 			continue // Skip this update instead of returning
 		}
 
