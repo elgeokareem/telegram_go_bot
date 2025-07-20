@@ -31,7 +31,14 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 	}
 
 	successMessage := fmt.Sprintf("Karma added to %s. Total karma: %d", messageToGiveKarma.FirstName, totalKarma)
-	SendMessageWithReply(chatId, replyToMessageId, successMessage)
+	if err := SendMessageWithReply(chatId, replyToMessageId, successMessage); err != nil {
+		CreateErrorRecord(conn, ErrorRecordInput{
+			GroupID:    chatId,
+			SenderID:   update.Message.From.ID,
+			ReceiverID: messageToGiveKarma.ID,
+			Error:      err.Error(),
+		})
+	}
 
 	return nil
 }
@@ -128,7 +135,14 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 				GroupID:    chatId,
 				Error:      err.Error(),
 			}
-			SendMessageWithReply(chatId, senderMessageId, "Error adding karma")
+			if err := SendMessageWithReply(chatId, senderMessageId, "Error adding karma"); err != nil {
+				CreateErrorRecord(conn, ErrorRecordInput{
+					GroupID:    chatId,
+					SenderID:   update.Message.From.ID,
+					ReceiverID: update.Message.ReplyToMessage.From.ID,
+					Error:      err.Error(),
+				})
+			}
 			CreateErrorRecord(conn, errorInput)
 			continue // Skip this update instead of returning
 		}

@@ -8,7 +8,7 @@ import (
 	"strconv"
 )
 
-func SendMessage(chatId int64, message string) {
+func SendMessage(chatId int64, message string) error {
 	// Define the base URL
 	token := os.Getenv("TOKEN")
 	telegramUrl := os.Getenv("TELEGRAM_BASE_URL")
@@ -25,12 +25,13 @@ func SendMessage(chatId int64, message string) {
 	// Send the HTTP request
 	resp, err := http.Get(completeUrl)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer resp.Body.Close()
+	return nil
 }
 
-func SendMessageWithReply[T ~int | ~int64](chatId int64, replyToMessageId T, message string) {
+func SendMessageWithReply[T ~int | ~int64](chatId int64, replyToMessageId T, message string) error {
 	// Define the base URL
 	token := os.Getenv("TOKEN")
 	telegramUrl := os.Getenv("TELEGRAM_BASE_URL")
@@ -48,7 +49,8 @@ func SendMessageWithReply[T ~int | ~int64](chatId int64, replyToMessageId T, mes
 	// Send the HTTP request
 	resp, err := shared.CustomClient.Get(completeUrl)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer resp.Body.Close()
+	return nil
 }
