@@ -3,7 +3,6 @@ package main
 import (
 	"bot/telegram/services"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
@@ -38,8 +37,6 @@ func main() {
 	for {
 		offset, err = services.ProcessTelegramMessages(telegramUrl, token, offset, conn)
 		if err != nil {
-			// log.Fatal(err). log.Fatal terminates the program
-			log.Println("ERROR: ", err)
 			errorInput := services.ErrorRecordInput{
 				Error: err.Error(),
 			}

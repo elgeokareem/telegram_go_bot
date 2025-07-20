@@ -66,11 +66,8 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 	longPollTimeout := 25
 	completeUrl := fmt.Sprintf("%s%s/getUpdates?offset=%d&timeout=%d", telegramUrl, token, offset, longPollTimeout)
 
-	fmt.Println("Fetching updates from:", completeUrl)
-
 	response, err := shared.CustomClient.Get(completeUrl)
 	if err != nil {
-		fmt.Println("ERROR http.Get(completeUrl)", err)
 		return offset, err
 	}
 	defer response.Body.Close()
@@ -100,7 +97,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		if strings.HasPrefix(update.Message.Text, "/lovedusers@WillibertoBot") {
 			lovedUsers, err := GetMostLovedUsers(conn)
 			if err != nil {
-				fmt.Println("ERROR loved users")
+				CreateErrorRecord(conn, ErrorRecordInput{Error: err.Error()})
 				continue // Skip this update instead of returning
 			}
 			fmt.Println(lovedUsers)
@@ -111,7 +108,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		if strings.HasPrefix(update.Message.Text, "/hatedusers@WillibertoBot") {
 			hatedUsers, err := GetMostHatedUsers(conn)
 			if err != nil {
-				fmt.Println("ERROR loved users")
+				CreateErrorRecord(conn, ErrorRecordInput{Error: err.Error()})
 				continue // Skip this update instead of returning
 			}
 			fmt.Println(hatedUsers)

@@ -22,18 +22,17 @@ func KarmaValidations(update structs.Update, conn *pgx.Conn) error {
 	if update.Message.ReplyToMessage.From.ID == update.Message.From.ID {
 		err := SendMessageWithReply(chatId, replyToMessageId, "Wew. You can't give karma to yourself dummy ~")
 		if err != nil {
-					CreateErrorRecord(conn, ErrorRecordInput{
-						GroupID:    chatId,
-						SenderID:   update.Message.From.ID,
-						ReceiverID: update.Message.ReplyToMessage.From.ID,
-						Error:      err.Error(),
-					})
+			CreateErrorRecord(conn, ErrorRecordInput{
+				GroupID:    chatId,
+				SenderID:   update.Message.From.ID,
+				ReceiverID: update.Message.ReplyToMessage.From.ID,
+				Error:      err.Error(),
+			})
 		}
 		return errors.New("can't give karma to yourself")
 	}
 
 	// If user is not inside the time frame
-
 	if err := UpdateKarmaGivenTimeOfUser(conn, update.Message); err != nil {
 		return err
 	}
@@ -80,12 +79,12 @@ func UpdateKarmaGivenTimeOfUser(conn *pgx.Conn, currentMessage *structs.Message)
 	if time.Since(lastMessageDateTime) < thresholdMessageLimit {
 		err := SendMessageWithReply(chatId, replyToMessageId, "Whoops you are not allowed to give karma yet :(")
 		if err != nil {
-					CreateErrorRecord(conn, ErrorRecordInput{
-						GroupID:    chatId,
-						SenderID:   currentMessage.From.ID,
-						ReceiverID: currentMessage.ReplyToMessage.From.ID,
-						Error:      err.Error(),
-					})
+			CreateErrorRecord(conn, ErrorRecordInput{
+				GroupID:    chatId,
+				SenderID:   currentMessage.From.ID,
+				ReceiverID: currentMessage.ReplyToMessage.From.ID,
+				Error:      err.Error(),
+			})
 		}
 		return errors.New("can't give karma yet")
 	}
