@@ -133,17 +133,19 @@ func createUsersRankingTable(conn *pgx.Conn) error {
 	return err
 }
 
-func UpsertUserKarma(conn *pgx.Conn, userID int64, groupID int64, firstName, lastName, username string, karmaValue int) (int, error) {
+func UpsertUserKarma(conn *pgx.Conn, userID int64, groupID int64, firstName, lastName, username string, karmaValue int, karmaGivenIncrement int, karmaTakenIncrement int) (int, error) {
 	sql := `
-    INSERT INTO users_ranking (user_id, group_id, first_name, last_name, username, karma, last_karma_given)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    INSERT INTO users_ranking (user_id, group_id, first_name, last_name, username, karma, last_karma_given, karma_given, karma_taken)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     ON CONFLICT (user_id, group_id)
     DO UPDATE SET
       first_name = EXCLUDED.first_name,
       last_name = EXCLUDED.last_name,
       username = EXCLUDED.username,
       karma = users_ranking.karma + $6,
-      last_karma_given = EXCLUDED.last_karma_given
+      last_karma_given = EXCLUDED.last_karma_given,
+      karma_given = users_ranking.karma_given + $8,
+      karma_taken = users_ranking.karma_taken + $9
     RETURNING karma
   `
 
@@ -158,6 +160,8 @@ func UpsertUserKarma(conn *pgx.Conn, userID int64, groupID int64, firstName, las
 		username,
 		karmaValue,
 		time.Now().UTC(),
+		karmaGivenIncrement,
+		karmaTakenIncrement,
 	).Scan(&totalKarma)
 	if err != nil {
 		return 0, err

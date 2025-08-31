@@ -24,9 +24,48 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 		messageToGiveKarma.LastName,
 		messageToGiveKarma.Username,
 		*karmaValue, // Dereference karmaValue here
+		0, // karmaGivenIncrement for receiver
+		0, // karmaTakenIncrement for receiver
 	)
 	if err != nil {
 		return err
+	}
+
+	// Update karma_given or karma_taken for the sender
+	senderID := update.Message.From.ID
+	senderGroupID := update.Message.Chat.ID
+	senderFirstName := update.Message.From.FirstName
+	senderLastName := update.Message.From.LastName
+	senderUsername := update.Message.From.Username
+
+	senderKarmaGivenIncrement := 0
+	senderKarmaTakenIncrement := 0
+
+	if *karmaValue > 0 {
+		senderKarmaGivenIncrement = 1
+	} else if *karmaValue < 0 {
+		senderKarmaTakenIncrement = 1
+	}
+
+	_, err = UpsertUserKarma(
+		conn,
+		senderID,
+		senderGroupID,
+		senderFirstName,
+		senderLastName,
+		senderUsername,
+		0, // karmaValue for sender (not changing sender's main karma score)
+		senderKarmaGivenIncrement,
+		senderKarmaTakenIncrement,
+	)
+	if err != nil {
+		CreateErrorRecord(conn, ErrorRecordInput{
+			GroupID:    senderGroupID,
+			SenderID:   senderID,
+			ReceiverID: messageToGiveKarma.ID,
+			Error:      fmt.Sprintf("error updating karma_given/taken for sender: %v", err),
+		})
+		return fmt.Errorf("error updating karma_given/taken for sender: %w", err)
 	}
 
 	successMessage := fmt.Sprintf("Karma added to %s. Total karma: %d", messageToGiveKarma.FirstName, totalKarma)
