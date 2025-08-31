@@ -3,7 +3,6 @@ package services
 import (
 	"bot/telegram/shared"
 	"bot/telegram/structs"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -40,24 +39,7 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 		})
 	}
 
-	return nil
-}
-
-// Check when was the last time the user gave karma.
-func CheckLastTimeUserGaveKarma(conn *pgx.Conn, currentMessage *structs.Message) error {
-	// TODO: For the future add a flag in the table with true or false something like.
-	sqlToAddKarmaGiver := `
-		SELECT last_karma_given FROM users_ranking ur WHERE ur.user_id = $1
-	`
-
-	_, err := conn.Exec(
-		context.Background(),
-		sqlToAddKarmaGiver,
-		currentMessage.From.ID,
-	)
-	if err != nil {
-		return fmt.Errorf("error => CheckIfUserCanGiveKarma:  %w", err)
-	}
+	// TODO: Add karma restrictrions per group
 
 	return nil
 }
@@ -86,8 +68,8 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 	for _, update := range result.Result {
 		newOffset = update.UpdateID + 1
 
-		if update.Message == nil {
-			continue // Skip this update instead of returning
+		if update.Message == nil || update.Message.ReplyToMessage == nil || update.Message.ReplyToMessage.From == nil {
+			continue // Skip this update if it's not a reply or doesn't have a sender in the reply
 		}
 
 		chatId := update.Message.Chat.ID
@@ -145,6 +127,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 					ReceiverID: update.Message.ReplyToMessage.From.ID,
 					Error:      err.Error(),
 				})
+				continue
 			}
 			CreateErrorRecord(conn, errorInput)
 			continue // Skip this update instead of returning

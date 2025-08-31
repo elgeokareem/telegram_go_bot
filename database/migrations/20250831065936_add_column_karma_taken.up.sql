@@ -1,0 +1,1 @@
+ALTER TABLE users_ranking ADD COLUMN karma_taken INT DEFAULT 0 NOT NULL;

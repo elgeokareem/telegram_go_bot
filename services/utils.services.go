@@ -59,28 +59,17 @@ func UpdateKarmaGivenTimeOfUser(conn *pgx.Conn, currentMessage *structs.Message)
 		return fmt.Errorf("error querying last_karma_given: %w", err)
 	}
 
-	fmt.Printf("2 Last message date time: %s\n", lastMessageDateTime)
+	fmt.Printf("Retrieved lastMessageDateTime: %v\n", lastMessageDateTime)
 
 	if err == pgx.ErrNoRows {
-		_, errUpsert := UpsertUserKarma(
-			conn,
-			currentMessage.From.ID,
-			chatId,
-			currentMessage.From.FirstName,
-			currentMessage.From.LastName,
-			currentMessage.From.Username,
-			0,
-		)
-
-		if errUpsert != nil {
-			return err
-		}
-
+		// If no record found, it means this is the first time this user is giving karma.
+		// Allow it, and the last_karma_given will be set when karma is successfully added.
 		return nil
 	}
 
 	thresholdMessageLimit := 60 * time.Second
-	if time.Since(lastMessageDateTime) < thresholdMessageLimit {
+	fmt.Printf("Time since last message: %v\n", time.Since(lastMessageDateTime))
+		if time.Since(lastMessageDateTime) < thresholdMessageLimit {
 		err := SendMessageWithReply(chatId, replyToMessageId, "Whoops you are not allowed to give karma yet :(")
 		if err != nil {
 			CreateErrorRecord(conn, ErrorRecordInput{
@@ -92,6 +81,20 @@ func UpdateKarmaGivenTimeOfUser(conn *pgx.Conn, currentMessage *structs.Message)
 		}
 		return errors.New("can't give karma yet")
 	}
+
+	// Update last_karma_given for the sender
+	fmt.Printf("Executing UPDATE for last_karma_given for sender %d in group %d\n", currentMessage.From.ID, currentMessage.Chat.ID)
+	_, err = conn.Exec(context.Background(), "UPDATE users_ranking SET last_karma_given = $3 WHERE user_id = $1 AND group_id = $2", currentMessage.From.ID, currentMessage.Chat.ID, time.Now().UTC())
+	if err != nil {
+		CreateErrorRecord(conn, ErrorRecordInput{
+			GroupID:    chatId,
+			SenderID:   currentMessage.From.ID,
+			ReceiverID: currentMessage.ReplyToMessage.From.ID,
+			Error:      err.Error(),
+		})
+		return fmt.Errorf("error updating last_karma_given for sender: %w", err)
+	}
+	fmt.Printf("Updated last_karma_given for sender %d in group %d\n", currentMessage.From.ID, currentMessage.Chat.ID)
 
 	return nil
 }

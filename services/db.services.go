@@ -157,7 +157,7 @@ func UpsertUserKarma(conn *pgx.Conn, userID int64, groupID int64, firstName, las
 		lastName,
 		username,
 		karmaValue,
-		time.Now(),
+		time.Now().UTC(),
 	).Scan(&totalKarma)
 	if err != nil {
 		return 0, err
