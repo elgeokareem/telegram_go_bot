@@ -2,6 +2,7 @@ package services
 
 import (
 	"bot/telegram/shared"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -22,12 +23,17 @@ func SendMessage(chatId int64, message string) error {
 	// Append the data to the URL
 	completeUrl := baseUrl + "?" + data.Encode()
 
-	// Send the HTTP request
-	resp, err := http.Get(completeUrl)
+	// Send the HTTP request with retry logic
+	resp, err := shared.CustomClient.Get(completeUrl)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("telegram API returned status %d for sendMessage", resp.StatusCode)
+	}
+
 	return nil
 }
 
@@ -52,5 +58,10 @@ func SendMessageWithReply[T ~int | ~int64](chatId int64, replyToMessageId T, mes
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("telegram API returned status %d for sendMessage with reply", resp.StatusCode)
+	}
+
 	return nil
 }

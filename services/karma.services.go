@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -24,8 +26,8 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 		messageToGiveKarma.LastName,
 		messageToGiveKarma.Username,
 		*karmaValue, // Dereference karmaValue here
-		0, // karmaGivenIncrement for receiver
-		0, // karmaTakenIncrement for receiver
+		0,           // karmaGivenIncrement for receiver
+		0,           // karmaTakenIncrement for receiver
 	)
 	if err != nil {
 		return err
@@ -83,24 +85,59 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 	return nil
 }
 
+// makeTelegramAPIRequest performs HTTP request to Telegram API with retry logic
+func makeTelegramAPIRequest(url string) (*http.Response, error) {
+	var lastErr error
+
+	// Retry up to 3 times with exponential backoff
+	for attempt := 0; attempt < 3; attempt++ {
+		response, err := shared.CustomClient.Get(url)
+		if err != nil {
+			lastErr = err
+			if attempt < 2 { // Don't sleep on the last attempt
+				waitTime := time.Duration(attempt+1) * time.Second
+				fmt.Printf("Telegram API request failed (attempt %d/3): %s. Retrying in %v...\n", attempt+1, err, waitTime)
+				time.Sleep(waitTime)
+			}
+			continue
+		}
+
+		// Check if the response status is OK
+		if response.StatusCode != http.StatusOK {
+			response.Body.Close()
+			lastErr = fmt.Errorf("telegram API returned status %d", response.StatusCode)
+			if attempt < 2 {
+				waitTime := time.Duration(attempt+1) * time.Second
+				fmt.Printf("Telegram API returned error status %d (attempt %d/3). Retrying in %v...\n", response.StatusCode, attempt+1, waitTime)
+				time.Sleep(waitTime)
+			}
+			continue
+		}
+
+		return response, nil
+	}
+
+	return nil, fmt.Errorf("telegram API request failed after 3 attempts: %w", lastErr)
+}
+
 func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn *pgx.Conn) (int, error) {
 	longPollTimeout := 25
 	completeUrl := fmt.Sprintf("%s%s/getUpdates?offset=%d&timeout=%d", telegramUrl, token, offset, longPollTimeout)
 
-	response, err := shared.CustomClient.Get(completeUrl)
+	response, err := makeTelegramAPIRequest(completeUrl)
 	if err != nil {
-		return offset, err
+		return offset, fmt.Errorf("failed to get updates from Telegram API: %w", err)
 	}
 	defer response.Body.Close()
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		return offset, err
+		return offset, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	var result structs.UpdateResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		return offset, err
+		return offset, fmt.Errorf("failed to parse JSON response: %w", err)
 	}
 
 	newOffset := offset

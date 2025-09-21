@@ -11,13 +11,24 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Global pool manager instance
+var GlobalPoolManager = &PoolManager{
+	pools: make(map[string]*pgxpool.Pool),
+}
+
 type PoolManager struct {
 	pools map[string]*pgxpool.Pool
 }
 
 func (pm *PoolManager) GetPool(dbName string) (*pgxpool.Pool, error) {
 	if pool, exists := pm.pools[dbName]; exists {
-		return pool, nil
+		// Check if pool is still healthy
+		if pool.Ping(context.Background()) == nil {
+			return pool, nil
+		}
+		// If ping fails, close the old pool and create a new one
+		pool.Close()
+		delete(pm.pools, dbName)
 	}
 
 	conn, err := CreateDbConnection(dbName)
@@ -31,6 +42,9 @@ func (pm *PoolManager) GetPool(dbName string) (*pgxpool.Pool, error) {
 		return nil, err
 	}
 	poolConfig.MaxConns = 10
+	poolConfig.MinConns = 2
+	poolConfig.MaxConnLifetime = time.Hour
+	poolConfig.MaxConnIdleTime = 30 * time.Minute
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {
@@ -39,6 +53,21 @@ func (pm *PoolManager) GetPool(dbName string) (*pgxpool.Pool, error) {
 
 	pm.pools[dbName] = pool
 	return pool, nil
+}
+
+// GetConnectionFromPool gets a connection from the pool
+func (pm *PoolManager) GetConnectionFromPool(dbName string) (*pgxpool.Conn, error) {
+	pool, err := pm.GetPool(dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := pool.Acquire(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to acquire connection from pool: %w", err)
+	}
+
+	return conn, nil
 }
 
 func CreateDbConnection(tableName string) (*pgx.Conn, error) {
@@ -237,16 +266,30 @@ func GetMostHatedUsers(conn *pgx.Conn) ([]UsersLovedHatedStruct, error) {
 func createErrorsTable(conn *pgx.Conn) error {
 	sql := `
 		CREATE TABLE IF NOT EXISTS bot_errors (
-			id SERIAL PRIMARY KEY,
-      group_id BIGINT,
-			sender_id BIGINT,
-      receiver_id BIGINT,
-      error TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-	`
+ 			id SERIAL PRIMARY KEY,
+       group_id BIGINT,
+ 			sender_id BIGINT,
+       receiver_id BIGINT,
+       error TEXT,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+ 		);
+ 	`
 
 	_, err := conn.Exec(context.Background(), sql)
 	return err
+}
+
+// CheckDbConnection verifies if the database connection is still alive
+func CheckDbConnection(conn *pgx.Conn) error {
+	if conn == nil {
+		return fmt.Errorf("database connection is nil")
+	}
+
+	// Ping the database to check if it's still connected
+	if err := conn.Ping(context.Background()); err != nil {
+		return fmt.Errorf("database ping failed: %w", err)
+	}
+
+	return nil
 }
