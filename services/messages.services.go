@@ -1,19 +1,18 @@
 package services
 
 import (
-	"bot/telegram/shared"
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
+
+	"bot/telegram/config"
+	"bot/telegram/shared"
 )
 
 func SendMessage(chatId int64, message string) error {
 	// Define the base URL
-	token := os.Getenv("TOKEN")
-	telegramUrl := os.Getenv("TELEGRAM_BASE_URL")
-	baseUrl := telegramUrl + token + "/sendMessage"
+	baseUrl := config.Env.TelegramBaseURL + config.Env.Token + "/sendMessage"
 
 	// Create the data for the API request
 	data := url.Values{}
@@ -39,9 +38,7 @@ func SendMessage(chatId int64, message string) error {
 
 func SendMessageWithReply[T ~int | ~int64](chatId int64, replyToMessageId T, message string) error {
 	// Define the base URL
-	token := os.Getenv("TOKEN")
-	telegramUrl := os.Getenv("TELEGRAM_BASE_URL")
-	baseUrl := telegramUrl + token + "/sendMessage"
+	baseUrl := config.Env.TelegramBaseURL + config.Env.Token + "/sendMessage"
 
 	// Create the data for the API request
 	data := url.Values{}

@@ -1,27 +1,21 @@
 package main
 
 import (
-	"bot/telegram/services"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/joho/godotenv"
+	"bot/telegram/config"
+	"bot/telegram/services"
 )
 
 func main() {
 	// Load environment variables
-	if err := godotenv.Load(".env"); err != nil {
-		fmt.Printf("Failed to load .env file: %s\n", err)
-		return
-	}
+	config.LoadEnv()
 
-	telegramUrl := os.Getenv("TELEGRAM_BASE_URL")
-	dbName := os.Getenv("DB_NAME")
-	token := os.Getenv("TOKEN")
+	telegramUrl := config.Env.TelegramBaseURL
+	dbName := config.Env.DBName
+	token := config.Env.Token
 
 	if telegramUrl == "" || dbName == "" || token == "" {
 		fmt.Println("Missing required environment variables: TELEGRAM_BASE_URL, DB_NAME, or TOKEN")
