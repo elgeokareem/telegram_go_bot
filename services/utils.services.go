@@ -23,7 +23,7 @@ func KarmaValidations(update structs.Update, conn *pgx.Conn) error {
 	if update.Message.ReplyToMessage.From.ID == update.Message.From.ID {
 		err := SendMessageWithReply(chatId, replyToMessageId, "Wew. You can't give karma to yourself dummy ~")
 		if err != nil {
-			errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
+			_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 				GroupID:    chatId,
 				SenderID:   update.Message.From.ID,
 				ReceiverID: update.Message.ReplyToMessage.From.ID,
@@ -34,24 +34,26 @@ func KarmaValidations(update structs.Update, conn *pgx.Conn) error {
 	}
 
 	// If user is not inside the time frame
-	if err := UpdateKarmaGivenTimeOfUser(conn, update.Message); err != nil {
+	if err := DbUserRestrictions(conn, update.Message); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func UpdateKarmaGivenTimeOfUser(conn *pgx.Conn, currentMessage *structs.Message) error {
+func DbUserRestrictions(conn *pgx.Conn, currentMessage *structs.Message) error {
 	chatId := currentMessage.Chat.ID
 	replyToMessageId := currentMessage.ReplyToMessage.MessageID
-
-	fmt.Printf("Updating karma given time for user %d in group %d\n", currentMessage.From.ID, currentMessage.Chat.ID)
+	receiverId := currentMessage.ReplyToMessage.From.ID
 
 	var lastMessageDateTime time.Time
-	err := conn.QueryRow(context.Background(), "SELECT last_karma_given FROM users_ranking WHERE user_id = $1 AND group_id = $2", currentMessage.From.ID, currentMessage.Chat.ID).Scan(&lastMessageDateTime)
+	var allowedToGiveKarma bool
+
+	validationSenderSql := "SELECT last_karma_given, allowed_to_give_karma FROM users_ranking WHERE user_id = $1 AND group_id = $2"
+	err := conn.QueryRow(context.Background(), validationSenderSql, currentMessage.From.ID, currentMessage.Chat.ID).Scan(&lastMessageDateTime, &allowedToGiveKarma)
 
 	if err != nil && err != pgx.ErrNoRows {
-		errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
+		_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 			GroupID:    chatId,
 			SenderID:   currentMessage.From.ID,
 			ReceiverID: currentMessage.ReplyToMessage.From.ID,
@@ -60,20 +62,41 @@ func UpdateKarmaGivenTimeOfUser(conn *pgx.Conn, currentMessage *structs.Message)
 		return fmt.Errorf("error querying last_karma_given: %w", err)
 	}
 
-	fmt.Printf("Retrieved lastMessageDateTime: %v\n", lastMessageDateTime)
-
 	if err == pgx.ErrNoRows {
 		// If no record found, it means this is the first time this user is giving karma.
 		// Allow it, and the last_karma_given will be set when karma is successfully added.
 		return nil
 	}
 
+	if !allowedToGiveKarma {
+		_ = SendMessageWithReply(chatId, replyToMessageId, "Sorry bro you can't give aura points around here.")
+		return stdErrors.New("can't give karma to yourself")
+	}
+
+	var allowedToReceiveKarma bool
+	validationReceiverSql := "SELECT allowed_to_receive_karma FROM users_ranking WHERE user_id = $1 AND group_id = $2"
+	err = conn.QueryRow(context.Background(), validationReceiverSql, receiverId, currentMessage.Chat.ID).Scan(&allowedToReceiveKarma)
+
+	if !allowedToReceiveKarma {
+		_ = SendMessageWithReply(chatId, replyToMessageId, "Sorry bro this person can't receive aura points.")
+		return stdErrors.New("receiver not allowed to receive karma")
+	}
+
+	if err != nil && err != pgx.ErrNoRows {
+		_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
+			GroupID:    chatId,
+			SenderID:   currentMessage.From.ID,
+			ReceiverID: currentMessage.ReplyToMessage.From.ID,
+			Error:      err.Error(),
+		})
+		return fmt.Errorf("error querying receiver restrictions: %w", err)
+	}
+
 	thresholdMessageLimit := 60 * time.Second
-	fmt.Printf("Time since last message: %v\n", time.Since(lastMessageDateTime))
 	if time.Since(lastMessageDateTime) < thresholdMessageLimit {
 		err := SendMessageWithReply(chatId, replyToMessageId, "Whoops you are not allowed to give karma yet :(")
 		if err != nil {
-			errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
+			_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 				GroupID:    chatId,
 				SenderID:   currentMessage.From.ID,
 				ReceiverID: currentMessage.ReplyToMessage.From.ID,
@@ -87,7 +110,7 @@ func UpdateKarmaGivenTimeOfUser(conn *pgx.Conn, currentMessage *structs.Message)
 	fmt.Printf("Executing UPDATE for last_karma_given for sender %d in group %d\n", currentMessage.From.ID, currentMessage.Chat.ID)
 	_, err = conn.Exec(context.Background(), "UPDATE users_ranking SET last_karma_given = $3 WHERE user_id = $1 AND group_id = $2", currentMessage.From.ID, currentMessage.Chat.ID, time.Now().UTC())
 	if err != nil {
-		errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
+		_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 			GroupID:    chatId,
 			SenderID:   currentMessage.From.ID,
 			ReceiverID: currentMessage.ReplyToMessage.From.ID,
@@ -95,7 +118,6 @@ func UpdateKarmaGivenTimeOfUser(conn *pgx.Conn, currentMessage *structs.Message)
 		})
 		return fmt.Errorf("error updating last_karma_given for sender: %w", err)
 	}
-	fmt.Printf("Updated last_karma_given for sender %d in group %d\n", currentMessage.From.ID, currentMessage.Chat.ID)
 
 	return nil
 }

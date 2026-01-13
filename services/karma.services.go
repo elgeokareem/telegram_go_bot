@@ -43,11 +43,14 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 
 	senderKarmaGivenIncrement := 0
 	senderKarmaTakenIncrement := 0
+	karmaMessage := ""
 
 	if *karmaValue > 0 {
 		senderKarmaGivenIncrement = 1
+		karmaMessage = "given to"
 	} else if *karmaValue < 0 {
 		senderKarmaTakenIncrement = 1
+		karmaMessage = "taken from"
 	}
 
 	_, err = UpsertUserKarma(
@@ -62,7 +65,7 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 		senderKarmaTakenIncrement,
 	)
 	if err != nil {
-		errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
+		_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 			GroupID:    senderGroupID,
 			SenderID:   senderID,
 			ReceiverID: messageToGiveKarma.ID,
@@ -71,9 +74,9 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 		return fmt.Errorf("error updating karma_given/taken for sender: %w", err)
 	}
 
-	successMessage := fmt.Sprintf("Karma added to %s. Total karma: %d", messageToGiveKarma.FirstName, totalKarma)
+	successMessage := fmt.Sprintf("Karma %s %s. Total karma: %d", karmaMessage, messageToGiveKarma.FirstName, totalKarma)
 	if err := SendMessageWithReply(chatId, replyToMessageId, successMessage); err != nil {
-		errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
+		_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 			GroupID:    chatId,
 			SenderID:   update.Message.From.ID,
 			ReceiverID: messageToGiveKarma.ID,
@@ -150,11 +153,10 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		newOffset = update.UpdateID + 1
 
 		if update.Message == nil {
-			continue // Skip this update if it's not a reply or doesn't have a sender in the reply
+			continue
 		}
 
 		chatId := update.Message.Chat.ID
-		senderMessageId := update.Message.MessageID
 
 		// Handle /lovedusers command
 		if strings.Contains(update.Message.Text, "/lovedusers") {
@@ -168,40 +170,10 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 			continue // Move to next update
 		}
 
+		// Handle +1/-1 karma updates
 		isPlusMinusOne, karmaValue := shared.ParsePlusMinusOneFromMessage(update.Message.Text)
-		if !isPlusMinusOne {
-			continue
-		}
-
-		// Handle adding/removing karma
-		if err := KarmaValidations(update, conn); err != nil {
-			errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
-				GroupID:    chatId,
-				SenderID:   update.Message.From.ID,
-				ReceiverID: update.Message.ReplyToMessage.From.ID,
-				Error:      err.Error(),
-			})
-			continue // Skip this update instead of returning
-		}
-
-		if err := AddKarmaToUser(update, karmaValue, conn); err != nil {
-			errorInput := errors.ErrorRecordInput{
-				SenderID:   update.Message.ReplyToMessage.From.ID,
-				ReceiverID: update.Message.From.ID,
-				GroupID:    chatId,
-				Error:      err.Error(),
-			}
-			if err := SendMessageWithReply(chatId, senderMessageId, "Error adding karma"); err != nil {
-				errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
-					GroupID:    chatId,
-					SenderID:   update.Message.From.ID,
-					ReceiverID: update.Message.ReplyToMessage.From.ID,
-					Error:      err.Error(),
-				})
-				continue
-			}
-			errors.CreateErrorRecord(conn, errorInput)
-			continue // Skip this update instead of returning
+		if isPlusMinusOne {
+			UpdateKarma(conn, update, karmaValue)
 		}
 	}
 
@@ -254,4 +226,44 @@ func MostHatedUsers(conn *pgx.Conn, chatId int64) {
 		b.WriteString(fmt.Sprintf("%d) %s — %d\n", i+1, name, u.Karma))
 	}
 	_ = SendMessage(chatId, b.String())
+}
+
+func UpdateKarma(conn *pgx.Conn, update structs.Update, karmaValue *int) {
+	message := update.Message
+	if update.Message == nil || message.From == nil || message.ReplyToMessage == nil || message.ReplyToMessage.From == nil {
+		return
+	}
+
+	chatId := message.Chat.ID
+	senderMessageId := message.MessageID
+
+	// Handle adding/removing karma
+	if err := KarmaValidations(update, conn); err != nil {
+		_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
+			GroupID:    chatId,
+			SenderID:   update.Message.From.ID,
+			ReceiverID: update.Message.ReplyToMessage.From.ID,
+			Error:      err.Error(),
+		})
+		return
+	}
+
+	if err := AddKarmaToUser(update, karmaValue, conn); err != nil {
+		errorInput := errors.ErrorRecordInput{
+			SenderID:   update.Message.ReplyToMessage.From.ID,
+			ReceiverID: update.Message.From.ID,
+			GroupID:    chatId,
+			Error:      err.Error(),
+		}
+		if err := SendMessageWithReply(chatId, senderMessageId, "Error adding karma"); err != nil {
+			_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
+				GroupID:    chatId,
+				SenderID:   update.Message.From.ID,
+				ReceiverID: update.Message.ReplyToMessage.From.ID,
+				Error:      err.Error(),
+			})
+			return
+		}
+		_ = errors.CreateErrorRecord(conn, errorInput)
+	}
 }
