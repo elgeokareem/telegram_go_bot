@@ -1,14 +1,15 @@
 package services
 
 import (
-	"bot/telegram/shared"
-	"bot/telegram/structs"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"bot/telegram/shared"
+	"bot/telegram/structs"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -144,36 +145,111 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 	for _, update := range result.Result {
 		newOffset = update.UpdateID + 1
 
-		if update.Message == nil || update.Message.ReplyToMessage == nil || update.Message.ReplyToMessage.From == nil {
-			continue // Skip this update if it's not a reply or doesn't have a sender in the reply
+		if update.Message == nil {
+			continue
 		}
 
-		chatId := update.Message.Chat.ID
+		chatID := update.Message.Chat.ID
+		text := update.Message.Text
+		chatType := update.Message.Chat.Type
+
+		// Handle commands that don't require a reply message
+		if update.Message.From != nil {
+			userID := update.Message.From.ID
+
+			// Handle /start command (for deep links from birthday button)
+			if strings.HasPrefix(text, "/start") && IsPrivateChat(chatType) {
+				handled, err := HandleStartCommand(conn, chatID, update.Message.From, text)
+				if err != nil {
+					CreateErrorRecord(conn, ErrorRecordInput{Error: err.Error()})
+				}
+				if handled {
+					continue
+				}
+			}
+
+			// Handle private messages for conversational flow (birthday registration)
+			if IsPrivateChat(chatType) && !strings.HasPrefix(text, "/") {
+				handled, err := HandlePrivateMessage(conn, chatID, update.Message.From, text)
+				if err != nil {
+					CreateErrorRecord(conn, ErrorRecordInput{Error: err.Error()})
+				}
+				if handled {
+					continue
+				}
+			}
+
+			// Handle /add command in group chat (shows birthday button)
+			if (strings.HasPrefix(text, "/add") || strings.HasPrefix(text, "/add@")) && IsGroupChat(chatType) {
+				if err := HandleAddCommand(chatID); err != nil {
+					CreateErrorRecord(conn, ErrorRecordInput{GroupID: chatID, Error: err.Error()})
+				}
+				continue
+			}
+
+			// Handle /birthday command in group chat (alias for /add)
+			if (strings.HasPrefix(text, "/birthday") || strings.HasPrefix(text, "/birthday@")) && IsGroupChat(chatType) {
+				if err := HandleBirthdayCommand(chatID); err != nil {
+					CreateErrorRecord(conn, ErrorRecordInput{GroupID: chatID, Error: err.Error()})
+				}
+				continue
+			}
+
+			// Handle /createevent command in group chat
+			if strings.HasPrefix(text, "/createevent") && IsGroupChat(chatType) {
+				if err := HandleCreateEventCommand(conn, chatID, userID, text); err != nil {
+					CreateErrorRecord(conn, ErrorRecordInput{GroupID: chatID, SenderID: userID, Error: err.Error()})
+				}
+				continue
+			}
+
+			// Handle /events command in group chat
+			if (strings.HasPrefix(text, "/events") || strings.HasPrefix(text, "/events@")) && IsGroupChat(chatType) {
+				if err := HandleEventsCommand(conn, chatID); err != nil {
+					CreateErrorRecord(conn, ErrorRecordInput{GroupID: chatID, Error: err.Error()})
+				}
+				continue
+			}
+
+			// Handle /deleteevent command in group chat
+			if strings.HasPrefix(text, "/deleteevent") && IsGroupChat(chatType) {
+				if err := HandleDeleteEventCommand(conn, chatID, text); err != nil {
+					CreateErrorRecord(conn, ErrorRecordInput{GroupID: chatID, SenderID: userID, Error: err.Error()})
+				}
+				continue
+			}
+		}
+
+		// From here, we need a reply message for karma functionality
+		if update.Message.ReplyToMessage == nil || update.Message.ReplyToMessage.From == nil {
+			continue
+		}
+
 		senderMessageId := update.Message.MessageID
 
 		// Handle /lovedusers command
-		if strings.HasPrefix(update.Message.Text, "/lovedusers@WillibertoBot") {
+		if strings.HasPrefix(text, "/lovedusers@WillibertoBot") {
 			lovedUsers, err := GetMostLovedUsers(conn)
 			if err != nil {
 				CreateErrorRecord(conn, ErrorRecordInput{Error: err.Error()})
-				continue // Skip this update instead of returning
+				continue
 			}
 			fmt.Println(lovedUsers)
-			continue // Move to next update
+			continue
 		}
 
 		// Handle /hatedusers command
-		if strings.HasPrefix(update.Message.Text, "/hatedusers@WillibertoBot") {
+		if strings.HasPrefix(text, "/hatedusers@WillibertoBot") {
 			hatedUsers, err := GetMostHatedUsers(conn)
 			if err != nil {
 				CreateErrorRecord(conn, ErrorRecordInput{Error: err.Error()})
-				continue // Skip this update instead of returning
+				continue
 			}
 			fmt.Println(hatedUsers)
-			continue // Move to next update
+			continue
 		}
 
-		isPlusMinusOne, karmaValue := shared.ParsePlusMinusOneFromMessage(update.Message.Text)
+		isPlusMinusOne, karmaValue := shared.ParsePlusMinusOneFromMessage(text)
 		if !isPlusMinusOne {
 			continue
 		}
@@ -181,24 +257,24 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		// Validations for giving karma
 		if err := KarmaValidations(update, conn); err != nil {
 			CreateErrorRecord(conn, ErrorRecordInput{
-				GroupID:    chatId,
+				GroupID:    chatID,
 				SenderID:   update.Message.From.ID,
 				ReceiverID: update.Message.ReplyToMessage.From.ID,
 				Error:      err.Error(),
 			})
-			continue // Skip this update instead of returning
+			continue
 		}
 
 		if err := AddKarmaToUser(update, karmaValue, conn); err != nil {
 			errorInput := ErrorRecordInput{
 				SenderID:   update.Message.ReplyToMessage.From.ID,
 				ReceiverID: update.Message.From.ID,
-				GroupID:    chatId,
+				GroupID:    chatID,
 				Error:      err.Error(),
 			}
-			if err := SendMessageWithReply(chatId, senderMessageId, "Error adding karma"); err != nil {
+			if err := SendMessageWithReply(chatID, senderMessageId, "Error adding karma"); err != nil {
 				CreateErrorRecord(conn, ErrorRecordInput{
-					GroupID:    chatId,
+					GroupID:    chatID,
 					SenderID:   update.Message.From.ID,
 					ReceiverID: update.Message.ReplyToMessage.From.ID,
 					Error:      err.Error(),
@@ -206,7 +282,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 				continue
 			}
 			CreateErrorRecord(conn, errorInput)
-			continue // Skip this update instead of returning
+			continue
 		}
 	}
 

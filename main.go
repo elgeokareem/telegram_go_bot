@@ -22,6 +22,9 @@ func main() {
 		return
 	}
 
+	// Start the background scheduler for birthday announcements
+	services.StartScheduler(dbName)
+
 	offset := 0
 
 	// Main processing loop with connection recovery
