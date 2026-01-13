@@ -1,9 +1,10 @@
 package services
 
 import (
+	"bot/telegram/errors"
 	"bot/telegram/structs"
 	"context"
-	"errors"
+	stdErrors "errors"
 	"fmt"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 
 func KarmaValidations(update structs.Update, conn *pgx.Conn) error {
 	if update.Message.ReplyToMessage == nil || update.Message.ReplyToMessage.From == nil {
-		return errors.New("no reply or sender")
+		return stdErrors.New("no reply or sender")
 	}
 
 	chatId := update.Message.Chat.ID
@@ -22,14 +23,14 @@ func KarmaValidations(update structs.Update, conn *pgx.Conn) error {
 	if update.Message.ReplyToMessage.From.ID == update.Message.From.ID {
 		err := SendMessageWithReply(chatId, replyToMessageId, "Wew. You can't give karma to yourself dummy ~")
 		if err != nil {
-			CreateErrorRecord(conn, ErrorRecordInput{
+			errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 				GroupID:    chatId,
 				SenderID:   update.Message.From.ID,
 				ReceiverID: update.Message.ReplyToMessage.From.ID,
 				Error:      err.Error(),
 			})
 		}
-		return errors.New("can't give karma to yourself")
+		return stdErrors.New("can't give karma to yourself")
 	}
 
 	// If user is not inside the time frame
@@ -50,7 +51,7 @@ func UpdateKarmaGivenTimeOfUser(conn *pgx.Conn, currentMessage *structs.Message)
 	err := conn.QueryRow(context.Background(), "SELECT last_karma_given FROM users_ranking WHERE user_id = $1 AND group_id = $2", currentMessage.From.ID, currentMessage.Chat.ID).Scan(&lastMessageDateTime)
 
 	if err != nil && err != pgx.ErrNoRows {
-		CreateErrorRecord(conn, ErrorRecordInput{
+		errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 			GroupID:    chatId,
 			SenderID:   currentMessage.From.ID,
 			ReceiverID: currentMessage.ReplyToMessage.From.ID,
@@ -69,24 +70,24 @@ func UpdateKarmaGivenTimeOfUser(conn *pgx.Conn, currentMessage *structs.Message)
 
 	thresholdMessageLimit := 60 * time.Second
 	fmt.Printf("Time since last message: %v\n", time.Since(lastMessageDateTime))
-		if time.Since(lastMessageDateTime) < thresholdMessageLimit {
+	if time.Since(lastMessageDateTime) < thresholdMessageLimit {
 		err := SendMessageWithReply(chatId, replyToMessageId, "Whoops you are not allowed to give karma yet :(")
 		if err != nil {
-			CreateErrorRecord(conn, ErrorRecordInput{
+			errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 				GroupID:    chatId,
 				SenderID:   currentMessage.From.ID,
 				ReceiverID: currentMessage.ReplyToMessage.From.ID,
 				Error:      err.Error(),
 			})
 		}
-		return errors.New("can't give karma yet")
+		return stdErrors.New("can't give karma yet")
 	}
 
 	// Update last_karma_given for the sender
 	fmt.Printf("Executing UPDATE for last_karma_given for sender %d in group %d\n", currentMessage.From.ID, currentMessage.Chat.ID)
 	_, err = conn.Exec(context.Background(), "UPDATE users_ranking SET last_karma_given = $3 WHERE user_id = $1 AND group_id = $2", currentMessage.From.ID, currentMessage.Chat.ID, time.Now().UTC())
 	if err != nil {
-		CreateErrorRecord(conn, ErrorRecordInput{
+		errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 			GroupID:    chatId,
 			SenderID:   currentMessage.From.ID,
 			ReceiverID: currentMessage.ReplyToMessage.From.ID,

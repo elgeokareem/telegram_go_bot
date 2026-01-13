@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bot/telegram/errors"
 	"bot/telegram/shared"
 	"bot/telegram/structs"
 	"encoding/json"
@@ -61,7 +62,7 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 		senderKarmaTakenIncrement,
 	)
 	if err != nil {
-		CreateErrorRecord(conn, ErrorRecordInput{
+		errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 			GroupID:    senderGroupID,
 			SenderID:   senderID,
 			ReceiverID: messageToGiveKarma.ID,
@@ -72,7 +73,7 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 
 	successMessage := fmt.Sprintf("Karma added to %s. Total karma: %d", messageToGiveKarma.FirstName, totalKarma)
 	if err := SendMessageWithReply(chatId, replyToMessageId, successMessage); err != nil {
-		CreateErrorRecord(conn, ErrorRecordInput{
+		errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 			GroupID:    chatId,
 			SenderID:   update.Message.From.ID,
 			ReceiverID: messageToGiveKarma.ID,
@@ -104,6 +105,10 @@ func makeTelegramAPIRequest(url string) (*http.Response, error) {
 
 		// Check if the response status is OK
 		if response.StatusCode != http.StatusOK {
+			if response.StatusCode == http.StatusConflict {
+				response.Body.Close()
+				return nil, fmt.Errorf("telegram getUpdates conflict (409): another bot instance is running")
+			}
 			response.Body.Close()
 			lastErr = fmt.Errorf("telegram API returned status %d", response.StatusCode)
 			if attempt < 2 {
@@ -144,7 +149,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 	for _, update := range result.Result {
 		newOffset = update.UpdateID + 1
 
-		if update.Message == nil || update.Message.ReplyToMessage == nil || update.Message.ReplyToMessage.From == nil {
+		if update.Message == nil {
 			continue // Skip this update if it's not a reply or doesn't have a sender in the reply
 		}
 
@@ -152,24 +157,14 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		senderMessageId := update.Message.MessageID
 
 		// Handle /lovedusers command
-		if strings.HasPrefix(update.Message.Text, "/lovedusers@WillibertoBot") {
-			lovedUsers, err := GetMostLovedUsers(conn)
-			if err != nil {
-				CreateErrorRecord(conn, ErrorRecordInput{Error: err.Error()})
-				continue // Skip this update instead of returning
-			}
-			fmt.Println(lovedUsers)
-			continue // Move to next update
+		if strings.Contains(update.Message.Text, "/lovedusers") {
+			MostLovedUsers(conn, chatId)
+			continue
 		}
 
 		// Handle /hatedusers command
-		if strings.HasPrefix(update.Message.Text, "/hatedusers@WillibertoBot") {
-			hatedUsers, err := GetMostHatedUsers(conn)
-			if err != nil {
-				CreateErrorRecord(conn, ErrorRecordInput{Error: err.Error()})
-				continue // Skip this update instead of returning
-			}
-			fmt.Println(hatedUsers)
+		if strings.Contains(update.Message.Text, "/hatedusers") {
+			MostHatedUsers(conn, chatId)
 			continue // Move to next update
 		}
 
@@ -178,9 +173,9 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 			continue
 		}
 
-		// Validations for giving karma
+		// Handle adding/removing karma
 		if err := KarmaValidations(update, conn); err != nil {
-			CreateErrorRecord(conn, ErrorRecordInput{
+			errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 				GroupID:    chatId,
 				SenderID:   update.Message.From.ID,
 				ReceiverID: update.Message.ReplyToMessage.From.ID,
@@ -190,14 +185,14 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		}
 
 		if err := AddKarmaToUser(update, karmaValue, conn); err != nil {
-			errorInput := ErrorRecordInput{
+			errorInput := errors.ErrorRecordInput{
 				SenderID:   update.Message.ReplyToMessage.From.ID,
 				ReceiverID: update.Message.From.ID,
 				GroupID:    chatId,
 				Error:      err.Error(),
 			}
 			if err := SendMessageWithReply(chatId, senderMessageId, "Error adding karma"); err != nil {
-				CreateErrorRecord(conn, ErrorRecordInput{
+				errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 					GroupID:    chatId,
 					SenderID:   update.Message.From.ID,
 					ReceiverID: update.Message.ReplyToMessage.From.ID,
@@ -205,10 +200,58 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 				})
 				continue
 			}
-			CreateErrorRecord(conn, errorInput)
+			errors.CreateErrorRecord(conn, errorInput)
 			continue // Skip this update instead of returning
 		}
 	}
 
 	return newOffset, nil
+}
+
+func MostLovedUsers(conn *pgx.Conn, chatId int64) {
+	lovedUsers, err := GetMostLovedUsers(conn, chatId)
+	if err != nil {
+		_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{Error: err.Error()})
+		return
+	}
+
+	if len(lovedUsers) == 0 {
+		_ = SendMessage(chatId, "No users found for this group yet.")
+		return
+	}
+
+	var b strings.Builder
+	b.WriteString("Most loved users (top 10):\n\n")
+	for i, u := range lovedUsers {
+		name := strings.TrimSpace(u.Name)
+		if name == "" {
+			name = "Unknown"
+		}
+		b.WriteString(fmt.Sprintf("%d) %s — %d\n", i+1, name, u.Karma))
+	}
+	_ = SendMessage(chatId, b.String())
+}
+
+func MostHatedUsers(conn *pgx.Conn, chatId int64) {
+	hatedUsers, err := GetMostHatedUsers(conn, chatId)
+	if err != nil {
+		_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{Error: err.Error()})
+		return
+	}
+
+	if len(hatedUsers) == 0 {
+		_ = SendMessage(chatId, "No users found for this group yet.")
+		return
+	}
+
+	var b strings.Builder
+	b.WriteString("Most hated folks here (top 10):\n\n")
+	for i, u := range hatedUsers {
+		name := strings.TrimSpace(u.Name)
+		if name == "" {
+			name = "Unknown"
+		}
+		b.WriteString(fmt.Sprintf("%d) %s — %d\n", i+1, name, u.Karma))
+	}
+	_ = SendMessage(chatId, b.String())
 }

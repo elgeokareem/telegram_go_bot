@@ -199,18 +199,20 @@ func UpsertUserKarma(conn *pgx.Conn, userID int64, groupID int64, firstName, las
 }
 
 type UsersLovedHatedStruct struct {
-	FullName string
-	Karma    int
+	Name  string
+	Karma int
 }
 
-func GetMostLovedUsers(conn *pgx.Conn) ([]UsersLovedHatedStruct, error) {
+func GetMostLovedUsers(conn *pgx.Conn, chatId int64) ([]UsersLovedHatedStruct, error) {
 	sql := `
-		SELECT CONCAT(first_name, ' ', last_name) as fullname, karma FROM users_ranking
-		WHERE karma > 0
-		ORDER BY karma DESC, fullname ASC
+		SELECT TRIM(CONCAT(first_name, ' ', COALESCE(last_name,''))) as name, karma FROM users_ranking ur
+		WHERE
+			ur.group_id = $1
+		ORDER BY karma DESC, name ASC
+		LIMIT 10;
 	`
 
-	rows, err := conn.Query(context.Background(), sql)
+	rows, err := conn.Query(context.Background(), sql, chatId)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +221,7 @@ func GetMostLovedUsers(conn *pgx.Conn) ([]UsersLovedHatedStruct, error) {
 	var users []UsersLovedHatedStruct
 	for rows.Next() {
 		var user UsersLovedHatedStruct
-		if err := rows.Scan(&user.FullName, &user.Karma); err != nil {
+		if err := rows.Scan(&user.Name, &user.Karma); err != nil {
 			return nil, err
 		}
 		users = append(users, user)
@@ -233,14 +235,16 @@ func GetMostLovedUsers(conn *pgx.Conn) ([]UsersLovedHatedStruct, error) {
 	return users, nil
 }
 
-func GetMostHatedUsers(conn *pgx.Conn) ([]UsersLovedHatedStruct, error) {
+func GetMostHatedUsers(conn *pgx.Conn, chatId int64) ([]UsersLovedHatedStruct, error) {
 	sql := `
-		SELECT CONCAT(first_name, ' ', last_name) as fullname, karma FROM users_ranking
-		WHERE karma < 0
-		ORDER BY karma ASC, fullname ASC
+		SELECT TRIM(CONCAT(first_name, ' ', COALESCE(last_name,''))) as name, karma FROM users_ranking ur
+		WHERE
+			ur.group_id = $1
+		ORDER BY karma ASC, name ASC
+		LIMIT 10;
 	`
 
-	rows, err := conn.Query(context.Background(), sql)
+	rows, err := conn.Query(context.Background(), sql, chatId)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +253,7 @@ func GetMostHatedUsers(conn *pgx.Conn) ([]UsersLovedHatedStruct, error) {
 	var users []UsersLovedHatedStruct
 	for rows.Next() {
 		var user UsersLovedHatedStruct
-		if err := rows.Scan(&user.FullName, &user.Karma); err != nil {
+		if err := rows.Scan(&user.Name, &user.Karma); err != nil {
 			return nil, err
 		}
 		users = append(users, user)
