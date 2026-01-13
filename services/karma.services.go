@@ -1,15 +1,17 @@
 package services
 
 import (
-	"bot/telegram/errors"
-	"bot/telegram/shared"
-	"bot/telegram/structs"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"bot/telegram/errors"
+
+	"bot/telegram/shared"
+	"bot/telegram/structs"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -156,6 +158,142 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 			continue
 		}
 
+		chatID := update.Message.Chat.ID
+		text := update.Message.Text
+		chatType := update.Message.Chat.Type
+
+		// Handle commands that don't require a reply message
+		if update.Message.From != nil {
+			userID := update.Message.From.ID
+
+			// Handle /start command (for deep links from birthday button)
+			if strings.HasPrefix(text, "/start") && IsPrivateChat(chatType) {
+				handled, err := HandleStartCommand(conn, chatID, update.Message.From, text)
+				if err != nil {
+					errors.CreateErrorRecord(conn, errors.ErrorRecordInput{Error: err.Error()})
+				}
+				if handled {
+					continue
+				}
+			}
+
+			// Handle private messages for conversational flow (birthday registration)
+			if IsPrivateChat(chatType) && !strings.HasPrefix(text, "/") {
+				handled, err := HandlePrivateMessage(conn, chatID, update.Message.From, text)
+				if err != nil {
+					errors.CreateErrorRecord(conn, errors.ErrorRecordInput{Error: err.Error()})
+				}
+				if handled {
+					continue
+				}
+			}
+
+			// Handle /add command in group chat (shows birthday button)
+			if (strings.HasPrefix(text, "/add") || strings.HasPrefix(text, "/add@")) && IsGroupChat(chatType) {
+				if err := HandleAddCommand(chatID); err != nil {
+					errors.CreateErrorRecord(conn, errors.ErrorRecordInput{GroupID: chatID, Error: err.Error()})
+				}
+				continue
+			}
+
+			// Handle /birthday command in group chat (alias for /add)
+			if (strings.HasPrefix(text, "/birthday") || strings.HasPrefix(text, "/birthday@")) && IsGroupChat(chatType) {
+				if err := HandleBirthdayCommand(chatID); err != nil {
+					errors.CreateErrorRecord(conn, errors.ErrorRecordInput{GroupID: chatID, Error: err.Error()})
+				}
+				continue
+			}
+
+			// Handle /createevent command in group chat
+			if strings.HasPrefix(text, "/createevent") && IsGroupChat(chatType) {
+				if err := HandleCreateEventCommand(conn, chatID, userID, text); err != nil {
+					errors.CreateErrorRecord(conn, errors.ErrorRecordInput{GroupID: chatID, SenderID: userID, Error: err.Error()})
+				}
+				continue
+			}
+
+			// Handle /events command in group chat
+			if (strings.HasPrefix(text, "/events") || strings.HasPrefix(text, "/events@")) && IsGroupChat(chatType) {
+				if err := HandleEventsCommand(conn, chatID); err != nil {
+					errors.CreateErrorRecord(conn, errors.ErrorRecordInput{GroupID: chatID, Error: err.Error()})
+				}
+				continue
+			}
+
+			// Handle /deleteevent command in group chat
+			if strings.HasPrefix(text, "/deleteevent") && IsGroupChat(chatType) {
+				if err := HandleDeleteEventCommand(conn, chatID, text); err != nil {
+					errors.CreateErrorRecord(conn, errors.ErrorRecordInput{GroupID: chatID, SenderID: userID, Error: err.Error()})
+				}
+				continue
+			}
+		}
+
+		// From here, we need a reply message for karma functionality
+		if update.Message.ReplyToMessage == nil || update.Message.ReplyToMessage.From == nil {
+			continue
+		}
+
+		senderMessageId := update.Message.MessageID
+
+		// Handle /lovedusers command
+		if strings.HasPrefix(text, "/lovedusers@WillibertoBot") {
+			lovedUsers, err := GetMostLovedUsers(conn, chatID)
+			if err != nil {
+				errors.CreateErrorRecord(conn, errors.ErrorRecordInput{Error: err.Error()})
+				continue
+			}
+			fmt.Println(lovedUsers)
+			continue
+		}
+
+		// Handle /hatedusers command
+		if strings.HasPrefix(text, "/hatedusers@WillibertoBot") {
+			hatedUsers, err := GetMostHatedUsers(conn, chatID)
+			if err != nil {
+				errors.CreateErrorRecord(conn, errors.ErrorRecordInput{Error: err.Error()})
+				continue
+			}
+			fmt.Println(hatedUsers)
+			continue
+		}
+
+		isPlusMinusOne, karmaValue := shared.ParsePlusMinusOneFromMessage(text)
+		if !isPlusMinusOne {
+			continue
+		}
+
+		// Validations for giving karma
+		if err := KarmaValidations(update, conn); err != nil {
+			errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
+				GroupID:    chatID,
+				SenderID:   update.Message.From.ID,
+				ReceiverID: update.Message.ReplyToMessage.From.ID,
+				Error:      err.Error(),
+			})
+			continue
+		}
+
+		if err := AddKarmaToUser(update, karmaValue, conn); err != nil {
+			errorInput := errors.ErrorRecordInput{
+				SenderID:   update.Message.ReplyToMessage.From.ID,
+				ReceiverID: update.Message.From.ID,
+				GroupID:    chatID,
+				Error:      err.Error(),
+			}
+			if err := SendMessageWithReply(chatID, senderMessageId, "Error adding karma"); err != nil {
+				errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
+					GroupID:    chatID,
+					SenderID:   update.Message.From.ID,
+					ReceiverID: update.Message.ReplyToMessage.From.ID,
+					Error:      err.Error(),
+				})
+				continue
+			}
+			errors.CreateErrorRecord(conn, errorInput)
+			continue
+		}
+
 		chatId := update.Message.Chat.ID
 
 		// Handle /lovedusers command
@@ -168,12 +306,6 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		if strings.Contains(update.Message.Text, "/hatedusers") {
 			MostHatedUsers(conn, chatId)
 			continue // Move to next update
-		}
-
-		// Handle +1/-1 karma updates
-		isPlusMinusOne, karmaValue := shared.ParsePlusMinusOneFromMessage(update.Message.Text)
-		if isPlusMinusOne {
-			UpdateKarma(conn, update, karmaValue)
 		}
 	}
 

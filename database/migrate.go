@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 
+	"bot/telegram/config"
+
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -22,11 +24,11 @@ func main() {
 	}
 
 	dbURL := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		os.Getenv("DB_USER"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("DB_HOST"),
-		os.Getenv("DB_PORT"),
-		os.Getenv("DB_NAME"))
+		config.Env.DBUser,
+		config.Env.DBPassword,
+		config.Env.DBHost,
+		config.Env.DBPort,
+		config.Env.DBName)
 
 	m, err := migrate.New(
 		"file://database/migrations",

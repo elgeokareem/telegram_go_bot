@@ -1,11 +1,12 @@
 package services
 
 import (
-	"bot/telegram/shared"
 	"context"
 	"fmt"
-	"os"
 	"time"
+
+	"bot/telegram/config"
+	"bot/telegram/shared"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -71,29 +72,21 @@ func (pm *PoolManager) GetConnectionFromPool(dbName string) (*pgxpool.Conn, erro
 }
 
 func CreateDbConnection(tableName string) (*pgx.Conn, error) {
-	dbSchema := os.Getenv("DB_SCHEMA")
-	dbName := os.Getenv("DB_NAME")
-	dbUser := os.Getenv("DB_USER")
-	dbPassword := os.Getenv("DB_PASSWORD")
-	dbHost := os.Getenv("DB_HOST")
-	dbPort := os.Getenv("DB_PORT")
-	dbDefaultName := os.Getenv("DB_DEFAULT_NAME")
-
-	dbUrl := shared.CreateDbString(dbSchema, dbUser, dbPassword, dbHost, dbPort, dbDefaultName)
+	dbUrl := shared.CreateDbString(config.Env.DBSchema, config.Env.DBUser, config.Env.DBPassword, config.Env.DBHost, config.Env.DBPort, config.Env.DBName)
 
 	conn, err := pgx.Connect(context.Background(), dbUrl)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't connecto to default %s DB. %w", dbSchema, err)
+		return nil, fmt.Errorf("couldn't connecto to default %s DB. %w", config.Env.DBSchema, err)
 	}
 
 	// if all good, check if the name of the DB exists, and if not create it.
-	exists, err := databaseExists(conn, dbName)
+	exists, err := databaseExists(conn, config.Env.DBName)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't check the existence of the database. %w", err)
 	}
 
 	if !exists {
-		err := createDatabase(conn, dbName)
+		err := createDatabase(conn, config.Env.DBName)
 		if err != nil {
 			return nil, fmt.Errorf("unable to connect to target database: %w", err)
 		}
@@ -103,7 +96,7 @@ func CreateDbConnection(tableName string) (*pgx.Conn, error) {
 	conn.Close(context.Background())
 
 	// Create a new connection string with the updated database name
-	newDbUrl := shared.CreateDbString(dbSchema, dbUser, dbPassword, dbHost, dbPort, dbName)
+	newDbUrl := shared.CreateDbString(config.Env.DBSchema, config.Env.DBUser, config.Env.DBPassword, config.Env.DBHost, config.Env.DBPort, config.Env.DBName)
 
 	// Connect to the newly created database
 	newConn, err := pgx.Connect(context.Background(), newDbUrl)
@@ -121,6 +114,12 @@ func CreateDbConnection(tableName string) (*pgx.Conn, error) {
 	if err != nil {
 		newConn.Close(context.Background())
 		return nil, fmt.Errorf("unable to create bot_errors table: %w", err)
+	}
+
+	err = createEventsTable(newConn)
+	if err != nil {
+		newConn.Close(context.Background())
+		return nil, fmt.Errorf("unable to create group_events table: %w", err)
 	}
 
 	return newConn, err
@@ -296,4 +295,28 @@ func CheckDbConnection(conn *pgx.Conn) error {
 	}
 
 	return nil
+}
+
+func createEventsTable(conn *pgx.Conn) error {
+	sql := `
+		CREATE TABLE IF NOT EXISTS group_events (
+			id SERIAL PRIMARY KEY,
+			group_id BIGINT NOT NULL,
+			user_id BIGINT NOT NULL,
+			event_type VARCHAR(20) NOT NULL DEFAULT 'event',
+			title VARCHAR(255) NOT NULL,
+			description TEXT,
+			event_date TIMESTAMPTZ,
+			is_recurring BOOLEAN DEFAULT FALSE,
+			recurrence_type VARCHAR(20),
+			recurrence_day VARCHAR(20),
+			created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, group_id, event_type)
+		);
+		CREATE INDEX IF NOT EXISTS idx_events_group_id ON group_events(group_id);
+		CREATE INDEX IF NOT EXISTS idx_events_type ON group_events(event_type);
+	`
+
+	_, err := conn.Exec(context.Background(), sql)
+	return err
 }

@@ -1,32 +1,30 @@
 package main
 
 import (
-	"bot/telegram/errors"
-	"bot/telegram/services"
 	"fmt"
-	"os"
 	"time"
 
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/joho/godotenv"
+	"bot/telegram/errors"
+	"bot/telegram/services"
+
+	"bot/telegram/config"
 )
 
 func main() {
 	// Load environment variables
-	if err := godotenv.Load(".env"); err != nil {
-		fmt.Printf("Failed to load .env file: %s\n", err)
-		return
-	}
+	config.LoadEnv()
 
-	telegramUrl := os.Getenv("TELEGRAM_BASE_URL")
-	dbName := os.Getenv("DB_NAME")
-	token := os.Getenv("TOKEN")
+	telegramUrl := config.Env.TelegramBaseURL
+	dbName := config.Env.DBName
+	token := config.Env.Token
 
 	if telegramUrl == "" || dbName == "" || token == "" {
 		fmt.Println("Missing required environment variables: TELEGRAM_BASE_URL, DB_NAME, or TOKEN")
 		return
 	}
+
+	// Start the background scheduler for birthday announcements
+	services.StartScheduler(dbName)
 
 	offset := 0
 
@@ -43,7 +41,6 @@ func main() {
 		// Process Telegram messages
 		pgConn := conn.Conn()
 		newOffset, err := services.ProcessTelegramMessages(telegramUrl, token, offset, pgConn)
-
 		if err != nil {
 			fmt.Printf("Error processing Telegram messages: %s\n", err)
 
@@ -59,7 +56,6 @@ func main() {
 		conn.Release()
 
 		if err != nil {
-
 			// If it's a network-related error, wait longer before retrying
 			if errors.IsNetworkError(err) {
 				fmt.Println("Network error detected, waiting 10 seconds before retry...")
