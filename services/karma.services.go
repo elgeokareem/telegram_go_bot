@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"bot/telegram/errors"
+
 	"bot/telegram/shared"
 	"bot/telegram/structs"
 
@@ -43,11 +45,14 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 
 	senderKarmaGivenIncrement := 0
 	senderKarmaTakenIncrement := 0
+	karmaMessage := ""
 
 	if *karmaValue > 0 {
 		senderKarmaGivenIncrement = 1
+		karmaMessage = "given to"
 	} else if *karmaValue < 0 {
 		senderKarmaTakenIncrement = 1
+		karmaMessage = "taken from"
 	}
 
 	_, err = UpsertUserKarma(
@@ -62,7 +67,7 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 		senderKarmaTakenIncrement,
 	)
 	if err != nil {
-		CreateErrorRecord(conn, ErrorRecordInput{
+		_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 			GroupID:    senderGroupID,
 			SenderID:   senderID,
 			ReceiverID: messageToGiveKarma.ID,
@@ -71,9 +76,9 @@ func AddKarmaToUser(update structs.Update, karmaValue *int, conn *pgx.Conn) erro
 		return fmt.Errorf("error updating karma_given/taken for sender: %w", err)
 	}
 
-	successMessage := fmt.Sprintf("Karma added to %s. Total karma: %d", messageToGiveKarma.FirstName, totalKarma)
+	successMessage := fmt.Sprintf("Karma %s %s. Total karma: %d", karmaMessage, messageToGiveKarma.FirstName, totalKarma)
 	if err := SendMessageWithReply(chatId, replyToMessageId, successMessage); err != nil {
-		CreateErrorRecord(conn, ErrorRecordInput{
+		_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 			GroupID:    chatId,
 			SenderID:   update.Message.From.ID,
 			ReceiverID: messageToGiveKarma.ID,
@@ -105,6 +110,10 @@ func makeTelegramAPIRequest(url string) (*http.Response, error) {
 
 		// Check if the response status is OK
 		if response.StatusCode != http.StatusOK {
+			if response.StatusCode == http.StatusConflict {
+				response.Body.Close()
+				return nil, fmt.Errorf("telegram getUpdates conflict (409): another bot instance is running")
+			}
 			response.Body.Close()
 			lastErr = fmt.Errorf("telegram API returned status %d", response.StatusCode)
 			if attempt < 2 {
@@ -161,7 +170,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 			if strings.HasPrefix(text, "/start") && IsPrivateChat(chatType) {
 				handled, err := HandleStartCommand(conn, chatID, update.Message.From, text)
 				if err != nil {
-					CreateErrorRecord(conn, ErrorRecordInput{Error: err.Error()})
+					errors.CreateErrorRecord(conn, errors.ErrorRecordInput{Error: err.Error()})
 				}
 				if handled {
 					continue
@@ -172,7 +181,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 			if IsPrivateChat(chatType) && !strings.HasPrefix(text, "/") {
 				handled, err := HandlePrivateMessage(conn, chatID, update.Message.From, text)
 				if err != nil {
-					CreateErrorRecord(conn, ErrorRecordInput{Error: err.Error()})
+					errors.CreateErrorRecord(conn, errors.ErrorRecordInput{Error: err.Error()})
 				}
 				if handled {
 					continue
@@ -182,7 +191,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 			// Handle /add command in group chat (shows birthday button)
 			if (strings.HasPrefix(text, "/add") || strings.HasPrefix(text, "/add@")) && IsGroupChat(chatType) {
 				if err := HandleAddCommand(chatID); err != nil {
-					CreateErrorRecord(conn, ErrorRecordInput{GroupID: chatID, Error: err.Error()})
+					errors.CreateErrorRecord(conn, errors.ErrorRecordInput{GroupID: chatID, Error: err.Error()})
 				}
 				continue
 			}
@@ -190,7 +199,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 			// Handle /birthday command in group chat (alias for /add)
 			if (strings.HasPrefix(text, "/birthday") || strings.HasPrefix(text, "/birthday@")) && IsGroupChat(chatType) {
 				if err := HandleBirthdayCommand(chatID); err != nil {
-					CreateErrorRecord(conn, ErrorRecordInput{GroupID: chatID, Error: err.Error()})
+					errors.CreateErrorRecord(conn, errors.ErrorRecordInput{GroupID: chatID, Error: err.Error()})
 				}
 				continue
 			}
@@ -198,7 +207,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 			// Handle /createevent command in group chat
 			if strings.HasPrefix(text, "/createevent") && IsGroupChat(chatType) {
 				if err := HandleCreateEventCommand(conn, chatID, userID, text); err != nil {
-					CreateErrorRecord(conn, ErrorRecordInput{GroupID: chatID, SenderID: userID, Error: err.Error()})
+					errors.CreateErrorRecord(conn, errors.ErrorRecordInput{GroupID: chatID, SenderID: userID, Error: err.Error()})
 				}
 				continue
 			}
@@ -206,7 +215,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 			// Handle /events command in group chat
 			if (strings.HasPrefix(text, "/events") || strings.HasPrefix(text, "/events@")) && IsGroupChat(chatType) {
 				if err := HandleEventsCommand(conn, chatID); err != nil {
-					CreateErrorRecord(conn, ErrorRecordInput{GroupID: chatID, Error: err.Error()})
+					errors.CreateErrorRecord(conn, errors.ErrorRecordInput{GroupID: chatID, Error: err.Error()})
 				}
 				continue
 			}
@@ -214,7 +223,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 			// Handle /deleteevent command in group chat
 			if strings.HasPrefix(text, "/deleteevent") && IsGroupChat(chatType) {
 				if err := HandleDeleteEventCommand(conn, chatID, text); err != nil {
-					CreateErrorRecord(conn, ErrorRecordInput{GroupID: chatID, SenderID: userID, Error: err.Error()})
+					errors.CreateErrorRecord(conn, errors.ErrorRecordInput{GroupID: chatID, SenderID: userID, Error: err.Error()})
 				}
 				continue
 			}
@@ -229,9 +238,9 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 
 		// Handle /lovedusers command
 		if strings.HasPrefix(text, "/lovedusers@WillibertoBot") {
-			lovedUsers, err := GetMostLovedUsers(conn)
+			lovedUsers, err := GetMostLovedUsers(conn, chatID)
 			if err != nil {
-				CreateErrorRecord(conn, ErrorRecordInput{Error: err.Error()})
+				errors.CreateErrorRecord(conn, errors.ErrorRecordInput{Error: err.Error()})
 				continue
 			}
 			fmt.Println(lovedUsers)
@@ -240,9 +249,9 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 
 		// Handle /hatedusers command
 		if strings.HasPrefix(text, "/hatedusers@WillibertoBot") {
-			hatedUsers, err := GetMostHatedUsers(conn)
+			hatedUsers, err := GetMostHatedUsers(conn, chatID)
 			if err != nil {
-				CreateErrorRecord(conn, ErrorRecordInput{Error: err.Error()})
+				errors.CreateErrorRecord(conn, errors.ErrorRecordInput{Error: err.Error()})
 				continue
 			}
 			fmt.Println(hatedUsers)
@@ -256,7 +265,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 
 		// Validations for giving karma
 		if err := KarmaValidations(update, conn); err != nil {
-			CreateErrorRecord(conn, ErrorRecordInput{
+			errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 				GroupID:    chatID,
 				SenderID:   update.Message.From.ID,
 				ReceiverID: update.Message.ReplyToMessage.From.ID,
@@ -266,14 +275,14 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		}
 
 		if err := AddKarmaToUser(update, karmaValue, conn); err != nil {
-			errorInput := ErrorRecordInput{
+			errorInput := errors.ErrorRecordInput{
 				SenderID:   update.Message.ReplyToMessage.From.ID,
 				ReceiverID: update.Message.From.ID,
 				GroupID:    chatID,
 				Error:      err.Error(),
 			}
 			if err := SendMessageWithReply(chatID, senderMessageId, "Error adding karma"); err != nil {
-				CreateErrorRecord(conn, ErrorRecordInput{
+				errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 					GroupID:    chatID,
 					SenderID:   update.Message.From.ID,
 					ReceiverID: update.Message.ReplyToMessage.From.ID,
@@ -281,10 +290,112 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 				})
 				continue
 			}
-			CreateErrorRecord(conn, errorInput)
+			errors.CreateErrorRecord(conn, errorInput)
 			continue
+		}
+
+		chatId := update.Message.Chat.ID
+
+		// Handle /lovedusers command
+		if strings.Contains(update.Message.Text, "/lovedusers") {
+			MostLovedUsers(conn, chatId)
+			continue
+		}
+
+		// Handle /hatedusers command
+		if strings.Contains(update.Message.Text, "/hatedusers") {
+			MostHatedUsers(conn, chatId)
+			continue // Move to next update
 		}
 	}
 
 	return newOffset, nil
+}
+
+func MostLovedUsers(conn *pgx.Conn, chatId int64) {
+	lovedUsers, err := GetMostLovedUsers(conn, chatId)
+	if err != nil {
+		_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{Error: err.Error()})
+		return
+	}
+
+	if len(lovedUsers) == 0 {
+		_ = SendMessage(chatId, "No users found for this group yet.")
+		return
+	}
+
+	var b strings.Builder
+	b.WriteString("Most loved users (top 10):\n\n")
+	for i, u := range lovedUsers {
+		name := strings.TrimSpace(u.Name)
+		if name == "" {
+			name = "Unknown"
+		}
+		b.WriteString(fmt.Sprintf("%d) %s — %d\n", i+1, name, u.Karma))
+	}
+	_ = SendMessage(chatId, b.String())
+}
+
+func MostHatedUsers(conn *pgx.Conn, chatId int64) {
+	hatedUsers, err := GetMostHatedUsers(conn, chatId)
+	if err != nil {
+		_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{Error: err.Error()})
+		return
+	}
+
+	if len(hatedUsers) == 0 {
+		_ = SendMessage(chatId, "No users found for this group yet.")
+		return
+	}
+
+	var b strings.Builder
+	b.WriteString("Most hated folks here (top 10):\n\n")
+	for i, u := range hatedUsers {
+		name := strings.TrimSpace(u.Name)
+		if name == "" {
+			name = "Unknown"
+		}
+		b.WriteString(fmt.Sprintf("%d) %s — %d\n", i+1, name, u.Karma))
+	}
+	_ = SendMessage(chatId, b.String())
+}
+
+func UpdateKarma(conn *pgx.Conn, update structs.Update, karmaValue *int) {
+	message := update.Message
+	if update.Message == nil || message.From == nil || message.ReplyToMessage == nil || message.ReplyToMessage.From == nil {
+		return
+	}
+
+	chatId := message.Chat.ID
+	senderMessageId := message.MessageID
+
+	// Handle adding/removing karma
+	if err := KarmaValidations(update, conn); err != nil {
+		_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
+			GroupID:    chatId,
+			SenderID:   update.Message.From.ID,
+			ReceiverID: update.Message.ReplyToMessage.From.ID,
+			Error:      err.Error(),
+		})
+		return
+	}
+
+	if err := AddKarmaToUser(update, karmaValue, conn); err != nil {
+		errorInput := errors.ErrorRecordInput{
+			SenderID:   update.Message.ReplyToMessage.From.ID,
+			ReceiverID: update.Message.From.ID,
+			GroupID:    chatId,
+			Error:      err.Error(),
+		}
+		if err := SendMessageWithReply(chatId, senderMessageId, "Error adding karma"); err != nil {
+			_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
+				GroupID:    chatId,
+				SenderID:   update.Message.From.ID,
+				ReceiverID: update.Message.ReplyToMessage.From.ID,
+				Error:      err.Error(),
+			})
+			return
+		}
+		_ = errors.CreateErrorRecord(conn, errorInput)
+	}
 }

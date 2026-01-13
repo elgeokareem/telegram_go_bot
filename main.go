@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
-	"bot/telegram/config"
+	"bot/telegram/errors"
 	"bot/telegram/services"
+
+	"bot/telegram/config"
 )
 
 func main() {
@@ -38,22 +39,25 @@ func main() {
 		}
 
 		// Process Telegram messages
-		newOffset, err := services.ProcessTelegramMessages(telegramUrl, token, offset, conn.Conn())
-		conn.Release()
-
+		pgConn := conn.Conn()
+		newOffset, err := services.ProcessTelegramMessages(telegramUrl, token, offset, pgConn)
 		if err != nil {
 			fmt.Printf("Error processing Telegram messages: %s\n", err)
 
 			// Log the error to database if possible
-			errorInput := services.ErrorRecordInput{
+			errorInput := errors.ErrorRecordInput{
 				Error: err.Error(),
 			}
-			if dbErr := services.CreateErrorRecord(conn.Conn(), errorInput); dbErr != nil {
+			if dbErr := errors.CreateErrorRecord(pgConn, errorInput); dbErr != nil {
 				fmt.Printf("Failed to log error to database: %s\n", dbErr)
 			}
+		}
 
+		conn.Release()
+
+		if err != nil {
 			// If it's a network-related error, wait longer before retrying
-			if isNetworkError(err) {
+			if errors.IsNetworkError(err) {
 				fmt.Println("Network error detected, waiting 10 seconds before retry...")
 				time.Sleep(10 * time.Second)
 			} else {
@@ -64,25 +68,4 @@ func main() {
 			time.Sleep(1 * time.Second)
 		}
 	}
-}
-
-// isNetworkError checks if the error is network-related
-func isNetworkError(err error) bool {
-	errStr := err.Error()
-	networkErrors := []string{
-		"connection refused",
-		"connection reset",
-		"timeout",
-		"network is unreachable",
-		"no such host",
-		"failed to get updates",
-		"Telegram API returned status",
-	}
-
-	for _, networkErr := range networkErrors {
-		if strings.Contains(strings.ToLower(errStr), networkErr) {
-			return true
-		}
-	}
-	return false
 }
