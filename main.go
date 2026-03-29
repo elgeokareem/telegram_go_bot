@@ -1,30 +1,26 @@
 package main
 
 import (
+	"bot/telegram/config"
 	"bot/telegram/errors"
 	"bot/telegram/services"
 	"fmt"
-	"os"
 	"time"
 
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Load environment variables
-	if err := godotenv.Load(".env"); err != nil {
-		fmt.Printf("Failed to load .env file: %s\n", err)
+	if err := config.Init(); err != nil {
+		fmt.Printf("Failed to load environment configuration: %s\n", err)
 		return
 	}
 
-	telegramUrl := os.Getenv("TELEGRAM_BASE_URL")
-	dbName := os.Getenv("DB_NAME")
-	token := os.Getenv("TOKEN")
+	env := config.Current
 
-	if telegramUrl == "" || dbName == "" || token == "" {
-		fmt.Println("Missing required environment variables: TELEGRAM_BASE_URL, DB_NAME, or TOKEN")
+	if err := env.ValidateBot(); err != nil {
+		fmt.Println(err.Error())
 		return
 	}
 
@@ -33,7 +29,7 @@ func main() {
 	// Main processing loop with connection recovery
 	for {
 		// Get a connection from the pool
-		conn, err := services.GlobalPoolManager.GetConnectionFromPool(dbName)
+		conn, err := services.GlobalPoolManager.GetConnectionFromPool(env.DBName)
 		if err != nil {
 			fmt.Printf("Failed to get database connection: %s. Retrying in 30 seconds...\n", err)
 			time.Sleep(30 * time.Second)
@@ -42,7 +38,7 @@ func main() {
 
 		// Process Telegram messages
 		pgConn := conn.Conn()
-		newOffset, err := services.ProcessTelegramMessages(telegramUrl, token, offset, pgConn)
+		newOffset, err := services.ProcessTelegramMessages(env.TelegramBaseURL, env.Token, offset, pgConn)
 
 		if err != nil {
 			fmt.Printf("Error processing Telegram messages: %s\n", err)

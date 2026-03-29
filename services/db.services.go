@@ -1,10 +1,10 @@
 package services
 
 import (
+	"bot/telegram/config"
 	"bot/telegram/shared"
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -71,13 +71,15 @@ func (pm *PoolManager) GetConnectionFromPool(dbName string) (*pgxpool.Conn, erro
 }
 
 func CreateDbConnection(tableName string) (*pgx.Conn, error) {
-	dbSchema := os.Getenv("DB_SCHEMA")
-	dbName := os.Getenv("DB_NAME")
-	dbUser := os.Getenv("DB_USER")
-	dbPassword := os.Getenv("DB_PASSWORD")
-	dbHost := os.Getenv("DB_HOST")
-	dbPort := os.Getenv("DB_PORT")
-	dbDefaultName := os.Getenv("DB_DEFAULT_NAME")
+	env := config.Current
+
+	dbSchema := env.DBSchema
+	dbName := env.DBName
+	dbUser := env.DBUser
+	dbPassword := env.DBPassword
+	dbHost := env.DBHost
+	dbPort := env.DBPort
+	dbDefaultName := env.DBDefaultName
 
 	dbUrl := shared.CreateDbString(dbSchema, dbUser, dbPassword, dbHost, dbPort, dbDefaultName)
 

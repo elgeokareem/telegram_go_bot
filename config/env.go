@@ -1,0 +1,78 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/joho/godotenv"
+)
+
+type Env struct {
+	TelegramBaseURL string
+	Token           string
+	DBSchema        string
+	DBName          string
+	DBUser          string
+	DBPassword      string
+	DBHost          string
+	DBPort          string
+	DBDefaultName   string
+}
+
+var Current Env
+
+func Init() error {
+	env, err := Load()
+	if err != nil {
+		return err
+	}
+
+	Current = env
+	return nil
+}
+
+func Load() (Env, error) {
+	_ = godotenv.Load(".env")
+
+	env := Env{
+		TelegramBaseURL: getEnvOrDefault("TELEGRAM_BASE_URL", "https://api.telegram.org/bot"),
+		Token:           strings.TrimSpace(os.Getenv("TOKEN")),
+		DBSchema:        getEnvOrDefault("DB_SCHEMA", "postgres"),
+		DBName:          strings.TrimSpace(os.Getenv("DB_NAME")),
+		DBUser:          getEnvOrDefault("DB_USER", "postgres"),
+		DBPassword:      strings.TrimSpace(os.Getenv("DB_PASSWORD")),
+		DBHost:          getEnvOrDefault("DB_HOST", "localhost"),
+		DBPort:          getEnvOrDefault("DB_PORT", "5432"),
+		DBDefaultName:   getEnvOrDefault("DB_DEFAULT_NAME", "postgres"),
+	}
+
+	if env.DBName == "" {
+		return env, fmt.Errorf("missing required environment variable: DB_NAME")
+	}
+
+	return env, nil
+}
+
+func (e Env) ValidateBot() error {
+	missing := make([]string, 0, 1)
+
+	if e.Token == "" {
+		missing = append(missing, "TOKEN")
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("missing required environment variables: %s", strings.Join(missing, ", "))
+	}
+
+	return nil
+}
+
+func getEnvOrDefault(key, fallback string) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+
+	return value
+}

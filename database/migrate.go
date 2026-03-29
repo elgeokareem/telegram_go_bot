@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bot/telegram/config"
 	"fmt"
 	"log"
 	"os"
@@ -8,7 +9,6 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -16,17 +16,18 @@ func main() {
 		log.Fatal("Usage: go run migrate.go <up|down>")
 	}
 
-	err := godotenv.Load(".env")
-	if err != nil {
-		log.Fatalf("Failed to load .env file: %v", err)
+	if err := config.Init(); err != nil {
+		log.Fatalf("Failed to load environment configuration: %v", err)
 	}
 
+	env := config.Current
+
 	dbURL := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		os.Getenv("DB_USER"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("DB_HOST"),
-		os.Getenv("DB_PORT"),
-		os.Getenv("DB_NAME"))
+		env.DBUser,
+		env.DBPassword,
+		env.DBHost,
+		env.DBPort,
+		env.DBName)
 
 	m, err := migrate.New(
 		"file://database/migrations",
