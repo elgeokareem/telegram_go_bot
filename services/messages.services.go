@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -113,7 +114,8 @@ func SendEventsWebAppMessage(chatId int64) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("telegram API returned status %d for sendMessage with web app", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("telegram API returned status %d for sendMessage with web app: %s", resp.StatusCode, string(body))
 	}
 
 	return nil
