@@ -158,13 +158,14 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 
 		chatId := update.Message.Chat.ID
 		if strings.Contains(update.Message.Text, "/new_event") {
-			if err := SendEventsWebAppMessage(chatId); err != nil {
+			userId := update.Message.From.ID
+			if err := SendEventsWebAppMessage(chatId, userId); err != nil {
 				fmt.Printf("Failed to send events WebApp message: %s\n", err)
 				_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
 					GroupID: chatId,
 					Error:   err.Error(),
 				})
-				_ = SendMessage(chatId, "Open the event form here: https://telegram.william-vegas.com/events-new")
+				_ = SendMessage(chatId, "Open the event form here: "+BuildEventsWebAppURL(chatId, userId))
 			}
 			continue
 		}

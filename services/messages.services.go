@@ -4,12 +4,17 @@ import (
 	"bot/telegram/config"
 	"bot/telegram/shared"
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 type sendMessageRequest struct {
@@ -23,12 +28,8 @@ type inlineKeyboardMarkup struct {
 }
 
 type inlineKeyboardButton struct {
-	Text   string     `json:"text"`
-	WebApp webAppInfo `json:"web_app"`
-}
-
-type webAppInfo struct {
-	URL string `json:"url"`
+	Text string `json:"text"`
+	URL  string `json:"url"`
 }
 
 func SendMessage(chatId int64, message string) error {
@@ -90,15 +91,30 @@ func SendMessageWithReply[T ~int | ~int64](chatId int64, replyToMessageId T, mes
 	return nil
 }
 
-func SendEventsWebAppMessage(chatId int64) error {
+func BuildEventsWebAppURL(chatId int64, userId int64) string {
+	env := config.Current
+	parsedURL, err := url.Parse(env.TelegramWebAppURL)
+	if err != nil {
+		return env.TelegramWebAppURL
+	}
+
+	query := parsedURL.Query()
+	query.Set("ctx", createSignedWebAppContext(chatId, userId))
+	parsedURL.RawQuery = query.Encode()
+
+	return parsedURL.String()
+}
+
+func SendEventsWebAppMessage(chatId int64, userId int64) error {
 	env := config.Current
 	baseUrl := env.TelegramBaseURL + env.Token + "/sendMessage"
+	webAppURL := BuildEventsWebAppURL(chatId, userId)
 	payload := sendMessageRequest{
 		ChatID: chatId,
 		Text:   "Create a new event from the Telegram Web App.",
 		ReplyMarkup: inlineKeyboardMarkup{InlineKeyboard: [][]inlineKeyboardButton{{{
-			Text:   "Create event",
-			WebApp: webAppInfo{URL: env.TelegramWebAppURL},
+			Text: "Create event",
+			URL:  webAppURL,
 		}}}},
 	}
 
@@ -119,4 +135,15 @@ func SendEventsWebAppMessage(chatId int64) error {
 	}
 
 	return nil
+}
+
+func createSignedWebAppContext(chatId int64, userId int64) string {
+	expiresAt := time.Now().Add(15 * time.Minute).Unix()
+	payload := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%d:%d:%d", chatId, userId, expiresAt)))
+
+	mac := hmac.New(sha256.New, []byte(config.Current.WebAppContextSecret))
+	mac.Write([]byte(payload))
+	signature := hex.EncodeToString(mac.Sum(nil))
+
+	return payload + "." + signature
 }

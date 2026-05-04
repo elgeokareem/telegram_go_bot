@@ -9,16 +9,17 @@ import (
 )
 
 type Env struct {
-	TelegramBaseURL   string
-	Token             string
-	TelegramWebAppURL string
-	DBSchema          string
-	DBName            string
-	DBUser            string
-	DBPassword        string
-	DBHost            string
-	DBPort            string
-	DBDefaultName     string
+	TelegramBaseURL     string
+	Token               string
+	TelegramWebAppURL   string
+	WebAppContextSecret string
+	DBSchema            string
+	DBName              string
+	DBUser              string
+	DBPassword          string
+	DBHost              string
+	DBPort              string
+	DBDefaultName       string
 }
 
 var Current Env
@@ -37,16 +38,17 @@ func Load() (Env, error) {
 	_ = godotenv.Load(".env")
 
 	env := Env{
-		TelegramBaseURL:   getEnvOrDefault("TELEGRAM_BASE_URL", "https://api.telegram.org/bot"),
-		Token:             strings.TrimSpace(os.Getenv("TOKEN")),
-		TelegramWebAppURL: getEnvOrDefault("TELEGRAM_WEB_APP_URL", "https://telegram.william-vegas.com/events-new"),
-		DBSchema:          getEnvOrDefault("DB_SCHEMA", "postgres"),
-		DBName:            strings.TrimSpace(os.Getenv("DB_NAME")),
-		DBUser:            getEnvOrDefault("DB_USER", "postgres"),
-		DBPassword:        strings.TrimSpace(os.Getenv("DB_PASSWORD")),
-		DBHost:            getEnvOrDefault("DB_HOST", "localhost"),
-		DBPort:            getEnvOrDefault("DB_PORT", "5432"),
-		DBDefaultName:     getEnvOrDefault("DB_DEFAULT_NAME", "postgres"),
+		TelegramBaseURL:     getEnvOrDefault("TELEGRAM_BASE_URL", "https://api.telegram.org/bot"),
+		Token:               strings.TrimSpace(os.Getenv("TOKEN")),
+		TelegramWebAppURL:   getEnvOrDefault("TELEGRAM_WEB_APP_URL", "https://telegram.william-vegas.com/events-new"),
+		WebAppContextSecret: strings.TrimSpace(os.Getenv("WEB_APP_CONTEXT_SECRET")),
+		DBSchema:            getEnvOrDefault("DB_SCHEMA", "postgres"),
+		DBName:              strings.TrimSpace(os.Getenv("DB_NAME")),
+		DBUser:              getEnvOrDefault("DB_USER", "postgres"),
+		DBPassword:          strings.TrimSpace(os.Getenv("DB_PASSWORD")),
+		DBHost:              getEnvOrDefault("DB_HOST", "localhost"),
+		DBPort:              getEnvOrDefault("DB_PORT", "5432"),
+		DBDefaultName:       getEnvOrDefault("DB_DEFAULT_NAME", "postgres"),
 	}
 
 	if env.DBName == "" {
@@ -57,10 +59,14 @@ func Load() (Env, error) {
 }
 
 func (e Env) ValidateBot() error {
-	missing := make([]string, 0, 1)
+	missing := make([]string, 0, 2)
 
 	if e.Token == "" {
 		missing = append(missing, "TOKEN")
+	}
+
+	if e.WebAppContextSecret == "" {
+		missing = append(missing, "WEB_APP_CONTEXT_SECRET")
 	}
 
 	if len(missing) > 0 {
