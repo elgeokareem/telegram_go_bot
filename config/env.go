@@ -9,15 +9,16 @@ import (
 )
 
 type Env struct {
-	TelegramBaseURL string
-	Token           string
-	DBSchema        string
-	DBName          string
-	DBUser          string
-	DBPassword      string
-	DBHost          string
-	DBPort          string
-	DBDefaultName   string
+	TelegramBaseURL   string
+	Token             string
+	TelegramWebAppURL string
+	DBSchema          string
+	DBName            string
+	DBUser            string
+	DBPassword        string
+	DBHost            string
+	DBPort            string
+	DBDefaultName     string
 }
 
 var Current Env
@@ -36,15 +37,16 @@ func Load() (Env, error) {
 	_ = godotenv.Load(".env")
 
 	env := Env{
-		TelegramBaseURL: getEnvOrDefault("TELEGRAM_BASE_URL", "https://api.telegram.org/bot"),
-		Token:           strings.TrimSpace(os.Getenv("TOKEN")),
-		DBSchema:        getEnvOrDefault("DB_SCHEMA", "postgres"),
-		DBName:          strings.TrimSpace(os.Getenv("DB_NAME")),
-		DBUser:          getEnvOrDefault("DB_USER", "postgres"),
-		DBPassword:      strings.TrimSpace(os.Getenv("DB_PASSWORD")),
-		DBHost:          getEnvOrDefault("DB_HOST", "localhost"),
-		DBPort:          getEnvOrDefault("DB_PORT", "5432"),
-		DBDefaultName:   getEnvOrDefault("DB_DEFAULT_NAME", "postgres"),
+		TelegramBaseURL:   getEnvOrDefault("TELEGRAM_BASE_URL", "https://api.telegram.org/bot"),
+		Token:             strings.TrimSpace(os.Getenv("TOKEN")),
+		TelegramWebAppURL: getEnvOrDefault("TELEGRAM_WEB_APP_URL", "https://telegram.william-vegas.com/events-new"),
+		DBSchema:          getEnvOrDefault("DB_SCHEMA", "postgres"),
+		DBName:            strings.TrimSpace(os.Getenv("DB_NAME")),
+		DBUser:            getEnvOrDefault("DB_USER", "postgres"),
+		DBPassword:        strings.TrimSpace(os.Getenv("DB_PASSWORD")),
+		DBHost:            getEnvOrDefault("DB_HOST", "localhost"),
+		DBPort:            getEnvOrDefault("DB_PORT", "5432"),
+		DBDefaultName:     getEnvOrDefault("DB_DEFAULT_NAME", "postgres"),
 	}
 
 	if env.DBName == "" {

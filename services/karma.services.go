@@ -157,6 +157,10 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		}
 
 		chatId := update.Message.Chat.ID
+		if strings.Contains(update.Message.Text, "/events") {
+			_ = SendEventsWebAppMessage(chatId)
+			continue
+		}
 
 		// Handle /lovedusers command
 		if strings.Contains(update.Message.Text, "/lovedusers") {
