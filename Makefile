@@ -9,7 +9,7 @@ export DB_USER DB_PASSWORD DB_HOST DB_PORT DB_NAME
 # Construct the database URL from environment variables
 DB_URL := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable
 
-.PHONY: migrate-up migrate-down migrate-create build
+.PHONY: migrate-up migrate-down migrate-create build build-worker
 
 ## Run all pending up migrations
 migrate-up:
@@ -24,6 +24,9 @@ migrate-down:
 build:
 	@go build -o telegram_go_bot .
 
+build-worker:
+	@go build -o event_reminder_worker ./cmd/event-reminder-worker
+
 ## Create a new migration file. Requires a 'name' argument.
 ## Example: make migrate-create name=add_user_table
 migrate-create:
@@ -33,4 +36,3 @@ migrate-create:
 	fi
 	@echo "Creating migration: $(name)..."
 	@migrate create -ext sql -dir database/migrations $(name)
-
