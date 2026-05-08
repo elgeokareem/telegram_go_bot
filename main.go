@@ -24,6 +24,12 @@ func main() {
 		return
 	}
 
+	if err := services.RegisterBotCommands(); err != nil {
+		fmt.Printf("Failed to register bot commands: %s\n", err)
+	} else {
+		fmt.Println("Bot commands registered")
+	}
+
 	offset := 0
 
 	// Main processing loop with connection recovery

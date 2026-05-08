@@ -32,6 +32,46 @@ type inlineKeyboardButton struct {
 	URL  string `json:"url"`
 }
 
+type botCommand struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+}
+
+type setMyCommandsRequest struct {
+	Commands []botCommand `json:"commands"`
+}
+
+func RegisterBotCommands() error {
+	env := config.Current
+	baseUrl := env.TelegramBaseURL + env.Token + "/setMyCommands"
+	payload := setMyCommandsRequest{
+		Commands: []botCommand{
+			{Command: "new_event", Description: "Open the event form"},
+			{Command: "set_birthday", Description: "Reply with DD-MM-YYYY to save a birthday"},
+			{Command: "lovedusers", Description: "Show users with the most positive karma"},
+			{Command: "hatedusers", Description: "Show users with the most negative karma"},
+		},
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	resp, err := shared.CustomClient.Post(baseUrl, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("telegram API returned status %d for setMyCommands: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
 func SendMessage(chatId int64, message string) error {
 	// Define the base URL
 	env := config.Current
