@@ -157,6 +157,18 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		}
 
 		chatId := update.Message.Chat.ID
+		if isSetBirthdayCommand(update.Message.Text) {
+			if err := SetBirthdayFromCommand(conn, update); err != nil {
+				fmt.Printf("Failed to set birthday: %s\n", err)
+				_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
+					GroupID: chatId,
+					Error:   err.Error(),
+				})
+				_ = SendMessageWithReply(chatId, update.Message.MessageID, "Birthday event was not created. Please try again later.")
+			}
+			continue
+		}
+
 		if strings.Contains(update.Message.Text, "/new_event") {
 			userId := update.Message.From.ID
 			if err := SendEventsWebAppMessage(chatId, userId); err != nil {
