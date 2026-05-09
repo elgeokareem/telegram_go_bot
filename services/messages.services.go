@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -46,6 +47,8 @@ func RegisterBotCommands() error {
 	baseUrl := env.TelegramBaseURL + env.Token + "/setMyCommands"
 	payload := setMyCommandsRequest{
 		Commands: []botCommand{
+			{Command: "command", Description: "Show command help"},
+			{Command: "ask_catholic_church", Description: "Ask a Catholic teaching question"},
 			{Command: "new_event", Description: "Open the event form"},
 			{Command: "set_birthday", Description: "Reply with DD-MM-YYYY to save a birthday"},
 			{Command: "lovedusers", Description: "Show users with the most positive karma"},
@@ -126,6 +129,32 @@ func SendMessageWithReply[T ~int | ~int64](chatId int64, replyToMessageId T, mes
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("telegram API returned status %d for sendMessage with reply", resp.StatusCode)
+	}
+
+	return nil
+}
+
+func SendLongMessageWithReply[T ~int | ~int64](chatId int64, replyToMessageId T, message string) error {
+	const telegramMessageLimit = 4096
+	trimmedMessage := strings.TrimSpace(message)
+	if trimmedMessage == "" {
+		return nil
+	}
+
+	for len(trimmedMessage) > 0 {
+		chunk := trimmedMessage
+		if len(chunk) > telegramMessageLimit {
+			chunk = trimmedMessage[:telegramMessageLimit]
+			if lastNewline := strings.LastIndex(chunk, "\n"); lastNewline > 0 {
+				chunk = chunk[:lastNewline]
+			}
+		}
+
+		if err := SendMessageWithReply(chatId, replyToMessageId, chunk); err != nil {
+			return err
+		}
+
+		trimmedMessage = strings.TrimSpace(strings.TrimPrefix(trimmedMessage, chunk))
 	}
 
 	return nil

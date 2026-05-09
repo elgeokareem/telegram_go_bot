@@ -13,6 +13,8 @@ type Env struct {
 	Token               string
 	TelegramWebAppURL   string
 	WebAppContextSecret string
+	MagisteriumAPIKey   string
+	MagisteriumAPIURL   string
 	DBSchema            string
 	DBName              string
 	DBUser              string
@@ -42,6 +44,8 @@ func Load() (Env, error) {
 		Token:               strings.TrimSpace(os.Getenv("TOKEN")),
 		TelegramWebAppURL:   getEnvOrDefault("TELEGRAM_WEB_APP_URL", "https://telegram.william-vegas.com/events-new"),
 		WebAppContextSecret: strings.TrimSpace(os.Getenv("WEB_APP_CONTEXT_SECRET")),
+		MagisteriumAPIKey:   strings.TrimSpace(os.Getenv("MAGISTERIUM_API_KEY")),
+		MagisteriumAPIURL:   getEnvOrDefault("MAGISTERIUM_API_URL", "https://www.magisterium.com/api/v1/chat/completions"),
 		DBSchema:            getEnvOrDefault("DB_SCHEMA", "postgres"),
 		DBName:              strings.TrimSpace(os.Getenv("DB_NAME")),
 		DBUser:              getEnvOrDefault("DB_USER", "postgres"),

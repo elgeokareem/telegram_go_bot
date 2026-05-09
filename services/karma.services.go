@@ -157,6 +157,28 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 		}
 
 		chatId := update.Message.Chat.ID
+		if isBotCommand(update.Message.Text, "/command") {
+			if err := SendCommandsHelp(chatId); err != nil {
+				fmt.Printf("Failed to send command help: %s\n", err)
+				_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
+					GroupID: chatId,
+					Error:   err.Error(),
+				})
+			}
+			continue
+		}
+
+		if isAskCatholicChurchCommand(update.Message.Text) {
+			if err := AskCatholicChurchFromCommand(update); err != nil {
+				fmt.Printf("Failed to answer Catholic Church question: %s\n", err)
+				_ = errors.CreateErrorRecord(conn, errors.ErrorRecordInput{
+					GroupID: chatId,
+					Error:   err.Error(),
+				})
+			}
+			continue
+		}
+
 		if isSetBirthdayCommand(update.Message.Text) {
 			if err := SetBirthdayFromCommand(conn, update); err != nil {
 				fmt.Printf("Failed to set birthday: %s\n", err)

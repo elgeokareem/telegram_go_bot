@@ -16,13 +16,7 @@ const setBirthdayCommand = "/set_birthday"
 const birthdayReminderHourUTC = 13
 
 func isSetBirthdayCommand(text string) bool {
-	fields := strings.Fields(strings.TrimSpace(text))
-	if len(fields) == 0 {
-		return false
-	}
-
-	command := strings.Split(fields[0], "@")[0]
-	return command == setBirthdayCommand
+	return isBotCommand(text, setBirthdayCommand)
 }
 
 func SetBirthdayFromCommand(conn *pgx.Conn, update structs.Update) error {
