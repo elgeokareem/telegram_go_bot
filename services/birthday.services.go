@@ -3,11 +3,13 @@ package services
 import (
 	"bot/telegram/structs"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 const setBirthdayCommand = "/set_birthday"
@@ -83,6 +85,14 @@ func SetBirthdayFromCommand(conn *pgx.Conn, update structs.Update) error {
 		description,
 		birthday.Format("2006-01-02"),
 	).Scan(&eventID); err != nil {
+		if isUniqueBirthdayConstraintError(err) {
+			return SendMessageWithReply(
+				chatID,
+				message.MessageID,
+				fmt.Sprintf("A birthday is already saved for this chat on %s.", birthday.Format("02-01-2006")),
+			)
+		}
+
 		return fmt.Errorf("insert birthday event: %w", err)
 	}
 
@@ -126,6 +136,11 @@ func parseBirthdayCommandDate(text string) (time.Time, error) {
 	}
 
 	return time.Parse("02-01-2006", fields[1])
+}
+
+func isUniqueBirthdayConstraintError(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "idx_events_unique_birthday_chat_event_date"
 }
 
 func telegramUserDisplayName(user *structs.User) string {

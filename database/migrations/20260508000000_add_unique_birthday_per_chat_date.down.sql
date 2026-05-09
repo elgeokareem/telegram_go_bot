@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_events_unique_birthday_chat_event_date;
