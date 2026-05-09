@@ -136,6 +136,7 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 	if err != nil {
 		return offset, fmt.Errorf("failed to get updates from Telegram API: %w", err)
 	}
+
 	defer response.Body.Close()
 
 	body, err := io.ReadAll(response.Body)
