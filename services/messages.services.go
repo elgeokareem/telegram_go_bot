@@ -10,13 +10,17 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
+
+var markdownBoldPattern = regexp.MustCompile(`\*\*([^*]+)\*\*`)
 
 type sendMessageRequest struct {
 	ChatID      int64                `json:"chat_id"`
@@ -134,6 +138,33 @@ func SendMessageWithReply[T ~int | ~int64](chatId int64, replyToMessageId T, mes
 	return nil
 }
 
+func SendMessageWithReplyParseMode[T ~int | ~int64](chatId int64, replyToMessageId T, message string, parseMode string) error {
+	env := config.Current
+	token := env.Token
+	telegramUrl := env.TelegramBaseURL
+	baseUrl := telegramUrl + token + "/sendMessage"
+
+	data := url.Values{}
+	data.Add("chat_id", strconv.FormatInt(chatId, 10))
+	data.Add("text", message)
+	data.Add("reply_to_message_id", strconv.FormatInt(int64(replyToMessageId), 10))
+	data.Add("parse_mode", parseMode)
+	data.Add("disable_web_page_preview", "true")
+
+	completeUrl := baseUrl + "?" + data.Encode()
+	resp, err := shared.CustomClient.Get(completeUrl)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("telegram API returned status %d for sendMessage with parse mode", resp.StatusCode)
+	}
+
+	return nil
+}
+
 func SendLongMessageWithReply[T ~int | ~int64](chatId int64, replyToMessageId T, message string) error {
 	const telegramMessageLimit = 4096
 	trimmedMessage := strings.TrimSpace(message)
@@ -158,6 +189,37 @@ func SendLongMessageWithReply[T ~int | ~int64](chatId int64, replyToMessageId T,
 	}
 
 	return nil
+}
+
+func SendLongHTMLMessageWithReply[T ~int | ~int64](chatId int64, replyToMessageId T, message string) error {
+	const telegramMessageLimit = 3500
+	trimmedMessage := strings.TrimSpace(message)
+	if trimmedMessage == "" {
+		return nil
+	}
+
+	for len(trimmedMessage) > 0 {
+		chunk := trimmedMessage
+		if len(chunk) > telegramMessageLimit {
+			chunk = trimmedMessage[:telegramMessageLimit]
+			if lastNewline := strings.LastIndex(chunk, "\n"); lastNewline > 0 {
+				chunk = chunk[:lastNewline]
+			}
+		}
+
+		if err := SendMessageWithReplyParseMode(chatId, replyToMessageId, telegramHTMLFromMarkdown(chunk), "HTML"); err != nil {
+			return err
+		}
+
+		trimmedMessage = strings.TrimSpace(strings.TrimPrefix(trimmedMessage, chunk))
+	}
+
+	return nil
+}
+
+func telegramHTMLFromMarkdown(message string) string {
+	escaped := html.EscapeString(message)
+	return markdownBoldPattern.ReplaceAllString(escaped, "<b>$1</b>")
 }
 
 func BuildEventsWebAppURL(chatId int64, userId int64) string {

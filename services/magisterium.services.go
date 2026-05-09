@@ -59,10 +59,14 @@ func AskCatholicChurchFromCommand(update structs.Update) error {
 
 	answer, err := askMagisterium(question)
 	if err != nil {
-		return SendMessageWithReply(chatID, message.MessageID, "I couldn't get an answer from Magisterium AI right now. Please try again later.")
+		if replyErr := SendMessageWithReply(chatID, message.MessageID, "I couldn't get an answer from Magisterium AI right now. Please try again later."); replyErr != nil {
+			return fmt.Errorf("ask magisterium: %w; send error reply: %w", err, replyErr)
+		}
+
+		return fmt.Errorf("ask magisterium: %w", err)
 	}
 
-	return SendLongMessageWithReply(chatID, message.MessageID, answer)
+	return SendLongHTMLMessageWithReply(chatID, message.MessageID, answer)
 }
 
 func askMagisterium(question string) (string, error) {
