@@ -29,6 +29,13 @@ Example: /ask_catholic_church What does the Church teach about forgiveness?
 Creates a yearly birthday event. Use it as a reply to the person's message so the bot knows whose birthday to save.
 Example: reply to Maria and send /set_birthday 24-12-1990
 
+/show_events
+Shows all active events in this group with their IDs, types, titles, and dates.
+
+/delete_event <id>
+Deletes an event by its ID. Only group admins can use this command.
+Example: /delete_event 42
+
 /lovedusers
 Shows the users with the most positive karma in this chat.
 

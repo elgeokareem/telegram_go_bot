@@ -55,6 +55,8 @@ func RegisterBotCommands() error {
 			{Command: "ask_catholic_church", Description: "Ask a Catholic teaching question"},
 			{Command: "new_event", Description: "Open the event form"},
 			{Command: "set_birthday", Description: "Reply with DD-MM-YYYY to save a birthday"},
+			{Command: "show_events", Description: "Show all active events in this group"},
+			{Command: "delete_event", Description: "Delete an event by ID (admins only)"},
 			{Command: "lovedusers", Description: "Show users with the most positive karma"},
 			{Command: "hatedusers", Description: "Show users with the most negative karma"},
 		},

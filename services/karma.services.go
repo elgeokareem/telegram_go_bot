@@ -192,6 +192,21 @@ func ProcessTelegramMessages(telegramUrl string, token string, offset int, conn 
 			continue
 		}
 
+		if strings.Contains(update.Message.Text, "/show_events") {
+			ShowEvents(conn, chatId)
+			continue
+		}
+
+		if strings.Contains(update.Message.Text, "/delete_event") {
+			fields := strings.Fields(strings.TrimSpace(update.Message.Text))
+			eventId := ""
+			if len(fields) >= 2 {
+				eventId = fields[1]
+			}
+			DeleteEvent(conn, chatId, update.Message.From.ID, eventId)
+			continue
+		}
+
 		if strings.Contains(update.Message.Text, "/new_event") {
 			userId := update.Message.From.ID
 			if err := SendEventsWebAppMessage(chatId, userId); err != nil {
